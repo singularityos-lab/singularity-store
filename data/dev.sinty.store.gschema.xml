@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="dev.sinty.store" path="/dev/sinty/store/">
+    <key name="recent-searches" type="as">
+      <default>[]</default>
+      <summary>Recent search queries</summary>
+    </key>
+    <key name="current-view" type="s">
+      <default>'discover'</default>
+      <summary>Current view</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Store
+Comment=Browse and install applications
+Exec=singularity-store
+Icon=dev.sinty.store
+Terminal=false
+Categories=System;PackageManager;
+StartupNotify=true
+StartupWMClass=dev.sinty.store

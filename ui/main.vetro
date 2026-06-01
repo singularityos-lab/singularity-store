@@ -1,0 +1,5 @@
+Template(class: "SingularityAppsStoreStoreWindow", parent: "SingularityWidgetsWindow") {
+    AppSidebar(id: "sidebar_scroll", vexpand: true)
+
+    Stack(id: "main_stack", hexpand: true, vexpand: true)
+}

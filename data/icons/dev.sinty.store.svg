@@ -1,0 +1,61 @@
+<svg width="236" height="236" viewBox="0 0 236 236" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip_store)">
+
+<!-- Bag shadow -->
+<path d="M34 90 Q28 90 26 96 L12 198 Q10 210 22 210 L214 210 Q226 210 224 198 L210 96 Q208 90 202 90 Z" fill="rgba(0,0,0,0.3)" transform="translate(3,4)"/>
+
+<!-- Bag back layer (depth) -->
+<path d="M32 90 Q26 90 24 96 L10 198 Q8 210 20 210 L216 210 Q228 210 226 198 L212 96 Q210 90 204 90 Z" fill="#1e3a5f"/>
+
+<!-- Bag middle layer -->
+<path d="M30 88 Q24 88 22 94 L8 196 Q6 208 18 208 L218 208 Q230 208 228 196 L214 94 Q212 88 206 88 Z" fill="#1d4ed8" opacity="0.7"/>
+
+<!-- Bag main body -->
+<path d="M28 86 Q22 86 20 92 L6 194 Q4 206 16 206 L220 206 Q232 206 230 194 L216 92 Q214 86 208 86 Z" fill="url(#bag_store)"/>
+
+<!-- Light bloom on bag -->
+<mask id="mask_store" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="4" y="86" width="228" height="120">
+<path d="M28 86 Q22 86 20 92 L6 194 Q4 206 16 206 L220 206 Q232 206 230 194 L216 92 Q214 86 208 86 Z" fill="white"/>
+</mask>
+<g mask="url(#mask_store)">
+<radialGradient id="bloom_store" cx="80" cy="100" r="140" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="white" stop-opacity="0.2"/>
+<stop offset="100%" stop-color="white" stop-opacity="0"/>
+</radialGradient>
+<path d="M28 86 Q22 86 20 92 L6 194 Q4 206 16 206 L220 206 Q232 206 230 194 L216 92 Q214 86 208 86 Z" fill="url(#bloom_store)"/>
+</g>
+
+<!-- Bag handle -->
+<path d="M80 86 Q80 42 118 42 Q156 42 156 86" stroke="url(#handle_store)" stroke-width="14" stroke-linecap="round" fill="none"/>
+
+<!-- Sparkle star (centered on bag) -->
+<g filter="url(#fstar_store)">
+<!-- Star: 4-point with smaller 4-point rotated -->
+<path d="M118 120 L123 137 L140 142 L123 147 L118 164 L113 147 L96 142 L113 137 Z" fill="url(#star_store)"/>
+<path d="M118 128 L120.5 135 L128 137.5 L120.5 140 L118 147 L115.5 140 L108 137.5 L115.5 135 Z" fill="white" opacity="0.6"/>
+</g>
+
+</g>
+<defs>
+<linearGradient id="bag_store" x1="118" y1="86" x2="118" y2="206" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="#1d4ed8"/>
+<stop offset="50%" stop-color="#1e40af"/>
+<stop offset="100%" stop-color="#1e3a8a"/>
+</linearGradient>
+<linearGradient id="handle_store" x1="80" y1="64" x2="156" y2="64" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="#3b82f6"/>
+<stop offset="50%" stop-color="#60a5fa"/>
+<stop offset="100%" stop-color="#3b82f6"/>
+</linearGradient>
+<filter id="fstar_store" x="92" y="116" width="52" height="52" filterUnits="userSpaceOnUse">
+<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
+</filter>
+<linearGradient id="star_store" x1="118" y1="120" x2="118" y2="164" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="#93c5fd"/>
+<stop offset="100%" stop-color="#60a5fa"/>
+</linearGradient>
+<clipPath id="clip_store">
+<rect width="236" height="236" fill="white"/>
+</clipPath>
+</defs>
+</svg>
