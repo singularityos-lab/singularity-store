@@ -15,7 +15,7 @@ namespace Singularity.Apps.Store {
 
         public StoreWindow(Gtk.Application app) {
             Object(application: app);
-            set_title("Store");
+            set_title(_("Store"));
             set_default_size(1100, 720);
             toolbar.is_static = true;
 

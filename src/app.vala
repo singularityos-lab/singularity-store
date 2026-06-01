@@ -469,15 +469,15 @@ namespace Singularity.Apps.Store {
             icon.add_css_class ("dim-label");
             err_box.append (icon);
 
-            var lbl = new Label ("Could not connect to Flathub");
+            var lbl = new Label (_("Could not connect to Flathub"));
             lbl.add_css_class ("title-2");
             err_box.append (lbl);
 
-            var sub = new Label ("Check your internet connection and try again.");
+            var sub = new Label (_("Check your internet connection and try again."));
             sub.add_css_class ("dim-label");
             err_box.append (sub);
 
-            var retry = new Button.with_label ("Retry");
+            var retry = new Button.with_label (_("Retry"));
             retry.halign = Align.CENTER;
             retry.add_css_class ("suggested-action");
             retry.clicked.connect (on_discover_retry);
@@ -638,7 +638,7 @@ namespace Singularity.Apps.Store {
             search_spinner.visible = false;
             outer.append (search_spinner);
 
-            search_status = new Label ("Search for apps on Flathub");
+            search_status = new Label (_("Search for apps on Flathub"));
             search_status.add_css_class ("dim-label");
             search_status.halign = Align.CENTER;
             search_status.valign = Align.CENTER;
@@ -712,7 +712,7 @@ namespace Singularity.Apps.Store {
                 }
 
                 if (hits == null || hits.get_length () == 0) {
-                    search_status.label   = "No apps found";
+                    search_status.label   = _("No apps found");
                     search_status.visible = true;
                     return;
                 }
@@ -725,7 +725,7 @@ namespace Singularity.Apps.Store {
                 warning ("Search error: %s", e.message);
                 search_spinner.spinning = false;
                 search_spinner.visible  = false;
-                search_status.label     = "Could not connect to Flathub";
+                search_status.label     = _("Could not connect to Flathub");
                 search_status.visible   = true;
             }
         }
@@ -751,7 +751,7 @@ namespace Singularity.Apps.Store {
         private void setup_installed_view () {
             var outer = new Box (Orientation.VERTICAL, 0);
 
-            installed_status = new Label ("Loading…");
+            installed_status = new Label (_("Loading…"));
             installed_status.add_css_class ("dim-label");
             installed_status.halign = Align.CENTER;
             installed_status.valign = Align.CENTER;
@@ -774,7 +774,7 @@ namespace Singularity.Apps.Store {
         }
 
         private void refresh_installed_async () {
-            installed_status.label   = "Loading installed apps…";
+            installed_status.label   = _("Loading installed apps…");
             installed_status.visible = true;
             installed_scroll.visible = false;
             new Thread<bool> ("installed-apps", do_load_installed);
@@ -817,7 +817,7 @@ namespace Singularity.Apps.Store {
             clear_box (installed_box);
 
             if (installed_app_ids.length == 0) {
-                var lbl = new Label ("No Flatpak apps installed");
+                var lbl = new Label (_("No Flatpak apps installed"));
                 lbl.add_css_class ("dim-label");
                 lbl.halign    = Align.CENTER;
                 lbl.margin_top = 80;
@@ -884,13 +884,13 @@ namespace Singularity.Apps.Store {
             var btn_box = new Box (Orientation.HORIZONTAL, 8);
             btn_box.valign = Align.CENTER;
 
-            var open_btn = new Button.with_label ("Open");
+            var open_btn = new Button.with_label (_("Open"));
             open_btn.add_css_class ("flat");
             open_btn.set_data<string> ("app-id", app_id);
             open_btn.clicked.connect (on_open_installed_clicked);
             btn_box.append (open_btn);
 
-            var remove_btn = new Button.with_label ("Remove");
+            var remove_btn = new Button.with_label (_("Remove"));
             remove_btn.add_css_class ("flat");
             remove_btn.add_css_class ("destructive-action");
             remove_btn.set_data<string> ("app-id", app_id);
@@ -928,7 +928,7 @@ namespace Singularity.Apps.Store {
         private void setup_updates_view () {
             var outer = new Box (Orientation.VERTICAL, 0);
 
-            updates_status = new Label ("Checking for updates…");
+            updates_status = new Label (_("Checking for updates…"));
             updates_status.add_css_class ("dim-label");
             updates_status.halign = Align.CENTER;
             updates_status.valign = Align.CENTER;
@@ -951,7 +951,7 @@ namespace Singularity.Apps.Store {
         }
 
         private void refresh_updates_async () {
-            updates_status.label   = "Checking for updates…";
+            updates_status.label   = _("Checking for updates…");
             updates_status.visible = true;
             updates_scroll.visible = false;
             new Thread<bool> ("check-updates", do_check_updates);
@@ -985,7 +985,7 @@ namespace Singularity.Apps.Store {
             clear_box (updates_box);
 
             if (pending_update_ids.length == 0) {
-                var lbl = new Label ("All apps are up to date.");
+                var lbl = new Label (_("All apps are up to date."));
                 lbl.add_css_class ("dim-label");
                 lbl.halign    = Align.CENTER;
                 lbl.margin_top = 80;
@@ -994,7 +994,7 @@ namespace Singularity.Apps.Store {
                 return false;
             }
 
-            var update_all_btn = new Button.with_label ("Update All");
+            var update_all_btn = new Button.with_label (_("Update All"));
             update_all_btn.add_css_class ("suggested-action");
             update_all_btn.halign      = Align.END;
             update_all_btn.margin_bottom = 12;
@@ -1028,7 +1028,7 @@ namespace Singularity.Apps.Store {
                 name_lbl.ellipsize = EllipsizeMode.END;
                 hbox.append (name_lbl);
 
-                var update_btn = new Button.with_label ("Update");
+                var update_btn = new Button.with_label (_("Update"));
                 update_btn.add_css_class ("suggested-action");
                 update_btn.add_css_class ("flat");
                 update_btn.set_data<string> ("app-id", app_id);
@@ -1058,7 +1058,7 @@ namespace Singularity.Apps.Store {
             try {
                 Process.spawn_command_line_async (
                     "flatpak update -y " + GLib.Shell.quote (app_id));
-                btn.label     = "Updating…";
+                btn.label     = _("Updating…");
                 btn.sensitive = false;
             } catch (Error e) {
                 warning ("Update error: %s", e.message);
@@ -1222,19 +1222,19 @@ namespace Singularity.Apps.Store {
             action_box.margin_top = 8;
 
             if (info.is_installed) {
-                var open_btn = new Button.with_label ("Open");
+                var open_btn = new Button.with_label (_("Open"));
                 open_btn.add_css_class ("suggested-action");
                 open_btn.set_data<string> ("app-id", info.app_id);
                 open_btn.clicked.connect (on_detail_open_clicked);
                 action_box.append (open_btn);
 
-                var remove_btn = new Button.with_label ("Remove");
+                var remove_btn = new Button.with_label (_("Remove"));
                 remove_btn.add_css_class ("destructive-action");
                 remove_btn.set_data<string> ("app-id", info.app_id);
                 remove_btn.clicked.connect (on_detail_remove_clicked);
                 action_box.append (remove_btn);
             } else {
-                var install_btn = new Button.with_label ("Get");
+                var install_btn = new Button.with_label (_("Get"));
                 install_btn.add_css_class ("suggested-action");
                 install_btn.set_data<string> ("app-id", info.app_id);
                 install_btn.clicked.connect (on_detail_install_clicked);
@@ -1248,7 +1248,7 @@ namespace Singularity.Apps.Store {
             meta.append (rating_box);
 
             if (info.version_str != null) {
-                var ver_lbl = new Label ("Version " + info.version_str);
+                var ver_lbl = new Label (_("Version ") + info.version_str);
                 ver_lbl.add_css_class ("dim-label");
                 ver_lbl.add_css_class ("caption");
                 ver_lbl.xalign = 0;
@@ -1317,7 +1317,7 @@ namespace Singularity.Apps.Store {
                     if (!meta.has_member ("permissions")) return;
                     var perms_obj = meta.get_object_member ("permissions");
 
-                    var title = new Label ("Permissions");
+                    var title = new Label (_("Permissions"));
                     title.add_css_class ("title-4");
                     title.xalign = 0;
                     title.margin_top = 24;
@@ -1382,7 +1382,7 @@ namespace Singularity.Apps.Store {
                                 p_icon.pixel_size = 16;
                                 p_icon.add_css_class ("dim-label");
                                 grid.attach (p_icon, 0, row, 1, 1);
-                                var p_lbl = new Label ("All Hardware Devices");
+                                var p_lbl = new Label (_("All Hardware Devices"));
                                 p_lbl.xalign = 0;
                                 p_lbl.add_css_class ("caption");
                                 grid.attach (p_lbl, 1, row, 1, 1);
@@ -1403,7 +1403,7 @@ namespace Singularity.Apps.Store {
                             p_icon.pixel_size = 16;
                             p_icon.add_css_class ("dim-label");
                             grid.attach (p_icon, 0, row, 1, 1);
-                            var p_lbl = new Label ("Access to Home Files");
+                            var p_lbl = new Label (_("Access to Home Files"));
                             p_lbl.xalign = 0;
                             p_lbl.add_css_class ("caption");
                             grid.attach (p_lbl, 1, row, 1, 1);
@@ -1413,7 +1413,7 @@ namespace Singularity.Apps.Store {
                             p_icon.pixel_size = 16;
                             p_icon.add_css_class ("dim-label");
                             grid.attach (p_icon, 0, row, 1, 1);
-                            var p_lbl = new Label ("Access to Downloads");
+                            var p_lbl = new Label (_("Access to Downloads"));
                             p_lbl.xalign = 0;
                             p_lbl.add_css_class ("caption");
                             grid.attach (p_lbl, 1, row, 1, 1);
@@ -1471,7 +1471,7 @@ namespace Singularity.Apps.Store {
                         star.add_css_class ("accent-label");
                         rating_box.append (star);
                     }
-                    var score_btn = new Button.with_label ("%.1f (%lld ratings)".printf (average, total));
+                    var score_btn = new Button.with_label (_("%.1f (%lld ratings)").printf (average, total));
                     score_btn.add_css_class ("flat");
                     score_btn.add_css_class ("caption");
                     score_btn.clicked.connect (() => {
@@ -1515,7 +1515,7 @@ namespace Singularity.Apps.Store {
                     reviews_sep.margin_bottom = 12;
                     target_box.append (reviews_sep);
 
-                    var reviews_lbl = new Label ("Reviews");
+                    var reviews_lbl = new Label (_("Reviews"));
                     reviews_lbl.add_css_class ("title-4");
                     reviews_lbl.xalign = 0;
                     reviews_lbl.margin_bottom = 12;
@@ -1578,7 +1578,7 @@ namespace Singularity.Apps.Store {
             try {
                 Process.spawn_command_line_async (
                     "flatpak uninstall -y " + GLib.Shell.quote (app_id));
-                btn.label     = "Removing…";
+                btn.label     = _("Removing…");
                 btn.sensitive = false;
             } catch (Error e) {
                 warning ("Remove error: %s", e.message);
@@ -1774,7 +1774,7 @@ namespace Singularity.Apps.Store {
             card.append (info_box);
 
             // Install / Open button on far right
-            var install_btn = new Button.with_label (captured_installed ? "Open" : "Get");
+            var install_btn = new Button.with_label (captured_installed ? _("Open") : _("Get"));
             install_btn.add_css_class ("store-install-btn");
             if (captured_installed) {
                 install_btn.add_css_class ("installed");
@@ -1809,7 +1809,7 @@ namespace Singularity.Apps.Store {
 
         private void install_app (string app_id, Button? btn) {
             if (btn != null) {
-                btn.label     = "Installing…";
+                btn.label     = _("Installing…");
                 btn.sensitive = false;
             }
 
@@ -1841,7 +1841,7 @@ namespace Singularity.Apps.Store {
                 yield proc.wait_async ();
 
                 if (btn != null) {
-                    btn.label = "Installed";
+                    btn.label = _("Installed");
                     btn.add_css_class ("installed");
                     btn.sensitive = true;
                 }
@@ -1861,7 +1861,7 @@ namespace Singularity.Apps.Store {
                 install_log_text.buffer.get_end_iter (out iter);
                 install_log_text.buffer.insert (ref iter, "ERROR: " + e.message + "\n", -1);
                 if (btn != null) {
-                    btn.label     = "Get";
+                    btn.label     = _("Get");
                     btn.sensitive = true;
                 }
             }
