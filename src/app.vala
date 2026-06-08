@@ -172,6 +172,8 @@ namespace Singularity.Apps.Store {
                 search_timeout_id = Timeout.add (200, do_search_timeout);
             });
             gtk_search_entry = search_bubble.entry;
+            // Type-ahead: start typing anywhere in the window to focus search.
+            gtk_search_entry.set_key_capture_widget (main_window);
         }
 
         private void on_back_clicked () {
