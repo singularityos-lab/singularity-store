@@ -88,6 +88,18 @@ namespace Singularity.Apps.Store {
             http_session.timeout = 12;
             load_settings ();
             setup_styles ();
+            ensure_flathub_remote ();
+        }
+
+        // Flathub is a per-user remote by default; add it once so installs work on a
+        // fresh account without root. Idempotent (--if-not-exists), non-blocking.
+        private void ensure_flathub_remote () {
+            try {
+                Process.spawn_command_line_async (
+                    "flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo");
+            } catch (Error e) {
+                warning ("flathub remote-add: %s", e.message);
+            }
         }
 
         private void load_settings () {
@@ -788,7 +800,7 @@ namespace Singularity.Apps.Store {
             int status = 0;
             try {
                 Process.spawn_command_line_sync (
-                    "flatpak list --columns=application",
+                    "flatpak --user list --columns=application",
                     out stdout_str, out stderr_str, out status);
             } catch (Error e) {
                 warning ("flatpak list error: %s", e.message);
@@ -916,7 +928,7 @@ namespace Singularity.Apps.Store {
             if (app_id == null) return;
             try {
                 Process.spawn_command_line_async (
-                    "flatpak uninstall -y " + GLib.Shell.quote (app_id));
+                    "flatpak --user uninstall -y " + GLib.Shell.quote (app_id));
                 if (row != null) row.visible = false;
             } catch (Error e) {
                 warning ("Remove error: %s", e.message);
@@ -965,7 +977,7 @@ namespace Singularity.Apps.Store {
             int status_code   = 0;
             try {
                 Process.spawn_command_line_sync (
-                    "flatpak remote-ls --updates --columns=application",
+                    "flatpak --user remote-ls --updates --columns=application",
                     out stdout_str, out stderr_str, out status_code);
             } catch (Error e) {
                 warning ("Updates check error: %s", e.message);
@@ -1048,7 +1060,7 @@ namespace Singularity.Apps.Store {
 
         private void on_update_all_clicked () {
             try {
-                Process.spawn_command_line_async ("flatpak update -y");
+                Process.spawn_command_line_async ("flatpak --user update -y");
             } catch (Error e) {
                 warning ("Update all error: %s", e.message);
             }
@@ -1059,7 +1071,7 @@ namespace Singularity.Apps.Store {
             if (app_id == null) return;
             try {
                 Process.spawn_command_line_async (
-                    "flatpak update -y " + GLib.Shell.quote (app_id));
+                    "flatpak --user update -y " +GLib.Shell.quote (app_id));
                 btn.label     = _("Updating…");
                 btn.sensitive = false;
             } catch (Error e) {
@@ -1579,7 +1591,7 @@ namespace Singularity.Apps.Store {
             if (app_id == null) return;
             try {
                 Process.spawn_command_line_async (
-                    "flatpak uninstall -y " + GLib.Shell.quote (app_id));
+                    "flatpak --user uninstall -y " + GLib.Shell.quote (app_id));
                 btn.label     = _("Removing…");
                 btn.sensitive = false;
             } catch (Error e) {
@@ -1825,7 +1837,7 @@ namespace Singularity.Apps.Store {
         private async void install_app_with_logs (string app_id, Button? btn) {
             try {
                 var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_PIPE);
-                var proc = launcher.spawnv ({"flatpak", "install", "-y", "flathub", app_id});
+                var proc = launcher.spawnv ({"flatpak", "--user", "install", "-y", "flathub", app_id});
 
                 // Read stdout in real-time
                 var stdout_stream = new DataInputStream (proc.get_stdout_pipe ());
