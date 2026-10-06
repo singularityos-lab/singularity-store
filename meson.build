@@ -39,6 +39,8 @@ sources = files(
   'src/app_info.vala',
   'src/window.vala',
   'src/app.vala',
+  'src/update_badge.vala',
+  'src/search_provider.vala',
   'src/main.vala',
 )
 
@@ -47,6 +49,35 @@ executable('singularity-store',
   dependencies: [gtk_dep, gee_dep, soup_dep, json_dep, gio_unix_dep, math_dep, libsingularity_dep],
   vala_args: ['--pkg=gio-unix-2.0'],
   install: true
+)
+
+executable('singularity-store-updates',
+  files('src/update_badge.vala', 'src/update_checker.vala'),
+  dependencies: [dependency('gio-2.0')],
+  install: true
+)
+
+service_conf = configuration_data()
+service_conf.set('bindir', get_option('prefix') / get_option('bindir'))
+configure_file(
+  input: 'data/dev.sinty.store.service.in',
+  output: 'dev.sinty.store.service',
+  configuration: service_conf,
+  install_dir: get_option('datadir') / 'dbus-1' / 'services'
+)
+configure_file(
+  input: 'data/dev.sinty.store.Updates.service.in',
+  output: 'dev.sinty.store.Updates.service',
+  configuration: service_conf,
+  install_dir: get_option('datadir') / 'dbus-1' / 'services'
+)
+install_data('data/dev.sinty.store.search-provider.ini',
+  rename: 'dev.sinty.store.ini',
+  install_dir: get_option('datadir') / 'singularity' / 'search-providers'
+)
+
+install_data('data/dev.sinty.store.updates.desktop',
+  install_dir: get_option('sysconfdir') / 'xdg' / 'autostart'
 )
 
 install_data('data/dev.sinty.store.desktop',

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=App Update Check
+Comment=Shows the number of app updates on the Store icon
+Icon=dev.sinty.store
+Exec=singularity-store-updates
+NoDisplay=true
+OnlyShowIn=Singularity;
+X-GNOME-Autostart-enabled=true

@@ -7,5 +7,15 @@ Exec=singularity-store
 Icon=dev.sinty.store
 Terminal=false
 Categories=System;PackageManager;
+Keywords=install;apps;flathub;flatpak;update;
 StartupNotify=true
 StartupWMClass=dev.sinty.store
+Actions=updates;installed;
+
+[Desktop Action updates]
+Name=Updates
+Exec=singularity-store --updates
+
+[Desktop Action installed]
+Name=Installed Apps
+Exec=singularity-store --installed

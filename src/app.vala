@@ -31,11 +31,14 @@ namespace Singularity.Apps.Store {
         private string[] installed_app_ids = {};
         private bool installed_load_then_discover = false;
         private string[] pending_update_ids = {};
+        private SimpleAction update_all_action;
         private string current_search_query = "";
         private string current_detail_app_id = "";
+        private string? startup_view = null;
 
         // Discover widgets
         private Spinner discover_spinner;
+        private Widget discover_skeleton;
         private ScrolledWindow discover_scroll;
         private Box discover_box;
 
@@ -51,18 +54,23 @@ namespace Singularity.Apps.Store {
 
         // Search / category-browse widgets
         private Spinner search_spinner;
-        private Label search_status;
+        private StatusPage search_status;
+        private Button search_status_button;
+        private string current_category = "";
+        private bool search_status_clears = false;
         private ScrolledWindow search_scroll;
         private Box search_result_box;
 
         // Installed widgets
         private Label installed_status;
         private ScrolledWindow installed_scroll;
+        private WelcomePage installed_empty;
         private Box installed_box;
 
         // Updates widgets
         private Label updates_status;
         private ScrolledWindow updates_scroll;
+        private WelcomePage updates_done;
         private Box updates_box;
 
         // Detail widgets
@@ -77,6 +85,39 @@ namespace Singularity.Apps.Store {
 
         public StoreApp () {
             Object (application_id: "dev.sinty.store", flags: ApplicationFlags.FLAGS_NONE);
+            add_main_option ("updates", 0, OptionFlags.NONE, OptionArg.NONE, _("Show available updates"), null);
+            add_main_option ("installed", 0, OptionFlags.NONE, OptionArg.NONE, _("Show installed apps"), null);
+        }
+
+        protected override int handle_local_options (GLib.VariantDict options) {
+            string? view = null;
+            if (options.contains ("updates")) view = "show-updates";
+            else if (options.contains ("installed")) view = "show-installed";
+            if (view == null) return -1;
+            try {
+                register ();
+            } catch (Error e) {
+                warning ("Store registration error: %s", e.message);
+                return 1;
+            }
+            if (!get_is_remote ()) {
+                startup_view = view;
+                return -1;
+            }
+            activate ();
+            activate_action (view, null);
+            return 0;
+        }
+
+        public void open_app_page (string app_id) {
+            activate ();
+            gtk_search_entry.text = "";
+            show_app_detail (app_id);
+        }
+
+        public void open_search (string query) {
+            activate ();
+            gtk_search_entry.text = query;
         }
 
         protected override void startup () {
@@ -88,7 +129,49 @@ namespace Singularity.Apps.Store {
             http_session.timeout = 12;
             load_settings ();
             setup_styles ();
+            setup_menu ();
             ensure_flathub_remote ();
+            ensure_update_checker ();
+        }
+
+        private File update_checker_autostart () {
+            return File.new_for_path (Path.build_filename (
+                Environment.get_user_config_dir (), "autostart", "dev.sinty.store.updates.desktop"));
+        }
+
+        private void ensure_update_checker () {
+            var autostart = update_checker_autostart ();
+            if (store_settings != null && !store_settings.get_boolean ("update-check-added")) {
+                var entry = new KeyFile ();
+                entry.set_string ("Desktop Entry", "Type", "Application");
+                entry.set_string ("Desktop Entry", "Name", _("App Update Check"));
+                entry.set_string ("Desktop Entry", "Comment", _("Shows the number of app updates on the Store icon"));
+                entry.set_string ("Desktop Entry", "Icon", "dev.sinty.store");
+                entry.set_string ("Desktop Entry", "Exec", "singularity-store-updates");
+                try {
+                    DirUtils.create_with_parents (autostart.get_parent ().get_path (), 0755);
+                    entry.save_to_file (autostart.get_path ());
+                    store_settings.set_boolean ("update-check-added", true);
+                } catch (Error e) {
+                    warning ("Update check autostart error: %s", e.message);
+                }
+            }
+            if (autostart.query_exists ()) wake_update_checker ();
+        }
+
+        private void wake_update_checker () {
+            var connection = get_dbus_connection ();
+            if (connection == null) return;
+            connection.call.begin ("dev.sinty.store.Updates", "/dev/sinty/store/Updates",
+                "org.freedesktop.Application", "Activate",
+                new GLib.Variant ("(@a{sv})", new GLib.Variant.array (VariantType.VARDICT.element (), {})),
+                null, DBusCallFlags.NONE, 5000, null, (obj, res) => {
+                    try {
+                        connection.call.end (res);
+                    } catch (Error e) {
+                        debug ("Update checker not available: %s", e.message);
+                    }
+                });
         }
 
         // Flathub is a per-user remote by default; add it once so installs work on a
@@ -100,6 +183,68 @@ namespace Singularity.Apps.Store {
             } catch (Error e) {
                 warning ("flathub remote-add: %s", e.message);
             }
+        }
+
+        private void setup_menu () {
+            var menu = new GLib.Menu ();
+            var file = new GLib.Menu ();
+            var f1 = new GLib.Menu ();
+            f1.append (_("Update All Apps"), "app.update-all");
+            file.append_section (null, f1);
+            var f2 = new GLib.Menu ();
+            f2.append (_("Close Window"), "win.close");
+            f2.append (_("Quit"), "app.quit");
+            file.append_section (null, f2);
+            menu.append_submenu (_("File"), file);
+            var edit = new GLib.Menu ();
+            var e1 = new GLib.Menu ();
+            e1.append (_("Find"), "app.find");
+            edit.append_section (null, e1);
+            var e2 = new GLib.Menu ();
+            e2.append (_("Settings"), "app.settings");
+            edit.append_section (null, e2);
+            menu.append_submenu (_("Edit"), edit);
+            var view = new GLib.Menu ();
+            var v1 = new GLib.Menu ();
+            v1.append (_("Featured"), "app.show-featured");
+            v1.append (_("Popular"), "app.show-popular");
+            v1.append (_("Recently Updated"), "app.show-recent");
+            view.append_section (null, v1);
+            var v2 = new GLib.Menu ();
+            v2.append (_("Installed"), "app.show-installed");
+            v2.append (_("Updates"), "app.show-updates");
+            view.append_section (null, v2);
+            var v3 = new GLib.Menu ();
+            v3.append (_("Back"), "app.back");
+            v3.append (_("Toggle Sidebar"), "app.toggle-sidebar");
+            view.append_section (null, v3);
+            menu.append_submenu (_("View"), view);
+            set_menubar (menu);
+            var settings_action = new SimpleAction ("settings", null);
+            settings_action.activate.connect (() => {
+                try {
+                    Singularity.Shell.ShellService shell = Bus.get_proxy_sync (BusType.SESSION, "dev.sinty.desktop", "/dev/sinty/Shell");
+                    shell.open_app_settings ("dev.sinty.store");
+                } catch (Error e) {
+                    warning ("Failed to open settings: %s", e.message);
+                }
+            });
+            add_action (settings_action);
+            update_all_action = new SimpleAction ("update-all", null);
+            update_all_action.set_enabled (false);
+            update_all_action.activate.connect (on_update_all_clicked);
+            add_action (update_all_action);
+            set_accels_for_action ("app.find", { "<Control>f" });
+            set_accels_for_action ("app.settings", { "<Control>comma" });
+            set_accels_for_action ("app.back", { "<Alt>Left" });
+            set_accels_for_action ("app.toggle-sidebar", { "F9" });
+            set_accels_for_action ("win.close", { "<Control>w" });
+        }
+
+        private void add_nav_action (string name, Gtk.Button btn) {
+            var action = new SimpleAction (name, null);
+            action.activate.connect (() => btn.clicked ());
+            add_action (action);
         }
 
         private void load_settings () {
@@ -141,6 +286,10 @@ namespace Singularity.Apps.Store {
 
             main_stack.transition_type = StackTransitionType.CROSSFADE;
             main_stack.transition_duration = 200;
+            main_stack.add_css_class ("store-pages");
+            var provider = new CssProvider ();
+            provider.load_from_string (".singularity-app:not(.ssd-mode) .store-pages > scrolledwindow > viewport > *, .singularity-app:not(.ssd-mode) .store-pages > box > scrolledwindow > viewport > * { padding-top: 44px; } .singularity-app:not(.ssd-mode) .store-pages > box > spinner { margin-top: 44px; } .singularity-app:not(.ssd-mode) .store-pages > box > .singularity-skeleton-list { margin-top: 56px; }");
+            StyleContext.add_provider_for_display (Gdk.Display.get_default (), provider, STYLE_PROVIDER_PRIORITY_USER + 1);
 
             setup_discover_view ();
             setup_charts_view ();
@@ -155,6 +304,11 @@ namespace Singularity.Apps.Store {
 
             installed_load_then_discover = true;
             refresh_installed_async ();
+
+            if (startup_view != null) {
+                activate_action (startup_view, null);
+                startup_view = null;
+            }
         }
 
         // ============================================================
@@ -169,8 +323,13 @@ namespace Singularity.Apps.Store {
             back_button = main_window.add_bubble_icon ("go-previous-symbolic", "Back",
                                                       () => on_back_clicked ());
             back_button.visible = false;
+            var back = new SimpleAction ("back", null);
+            back.set_enabled (false);
+            back.activate.connect (() => on_back_clicked ());
+            add_action (back);
+            back_button.notify["visible"].connect (() => back.set_enabled (back_button.visible));
 
-            var search_bubble = main_window.add_bubble_search ("Search apps...", (t) => {
+            var search_bubble = main_window.add_bubble_search (_("Search Apps…"), (t) => {
                 current_search_query = t.strip ();
                 if (search_timeout_id != 0) {
                     Source.remove (search_timeout_id);
@@ -186,6 +345,16 @@ namespace Singularity.Apps.Store {
             gtk_search_entry = search_bubble.entry;
             // Type-ahead: start typing anywhere in the window to focus search.
             gtk_search_entry.set_key_capture_widget (main_window);
+
+            var find = new SimpleAction ("find", null);
+            find.activate.connect (() => search_bubble.grab_focus_entry ());
+            add_action (find);
+
+            var toggle_sidebar = new SimpleAction ("toggle-sidebar", null);
+            toggle_sidebar.activate.connect (() => {
+                main_window.set_sidebar_visible (!main_window.get_sidebar_visible ());
+            });
+            add_action (toggle_sidebar);
         }
 
         private void on_back_clicked () {
@@ -315,6 +484,12 @@ namespace Singularity.Apps.Store {
             });
             box.append(updates_btn);
 
+            add_nav_action ("show-featured", featured_btn);
+            add_nav_action ("show-popular", popular_btn);
+            add_nav_action ("show-recent", recent_btn);
+            add_nav_action ("show-installed", installed_btn);
+            add_nav_action ("show-updates", updates_btn);
+
             main_window.set_sidebar (sidebar);
             main_window.set_sidebar_visible (true);
 
@@ -364,7 +539,11 @@ namespace Singularity.Apps.Store {
             var outer = new Box (Orientation.VERTICAL, 0);
 
             discover_spinner = make_spinner ();
+            discover_spinner.visible = false;
             outer.append (discover_spinner);
+            discover_skeleton = Singularity.Widgets.Skeleton.list (8);
+            discover_skeleton.vexpand = true;
+            outer.append (discover_skeleton);
 
             discover_box = new Box (Orientation.VERTICAL, 0);
             discover_box.margin_start  = 12;
@@ -383,8 +562,8 @@ namespace Singularity.Apps.Store {
 
         private void load_discover () {
             discover_loaded = true;
-            discover_spinner.spinning = true;
-            discover_spinner.visible  = true;
+            discover_skeleton.visible = true;
+            discover_skeleton.opacity = 1.0;
             discover_scroll.visible   = false;
             clear_box (discover_box);
 
@@ -463,41 +642,30 @@ namespace Singularity.Apps.Store {
                 }
             }
 
-            discover_scroll.visible = true;
+            Singularity.Widgets.Skeleton.reveal (discover_skeleton, discover_scroll);
         }
 
         private void show_discover_error () {
             discover_loaded = false;
             discover_spinner.spinning = false;
             discover_spinner.visible  = false;
+            discover_skeleton.visible = false;
             clear_box (discover_box);
 
-            var err_box = new Box (Orientation.VERTICAL, 16);
-            err_box.halign    = Align.CENTER;
-            err_box.valign    = Align.CENTER;
-            err_box.vexpand   = true;
-            err_box.margin_top = 80;
+            var err_page = new StatusPage ();
+            err_page.vexpand = true;
+            err_page.icon_name = "network-error";
+            err_page.title = _("Could Not Connect to Flathub");
+            err_page.description = _("Check your internet connection and try again.");
 
-            var icon = new Image.from_icon_name ("network-error-symbolic");
-            icon.pixel_size = 64;
-            icon.add_css_class ("dim-label");
-            err_box.append (icon);
-
-            var lbl = new Label (_("Could not connect to Flathub"));
-            lbl.add_css_class ("title-2");
-            err_box.append (lbl);
-
-            var sub = new Label (_("Check your internet connection and try again."));
-            sub.add_css_class ("dim-label");
-            err_box.append (sub);
-
-            var retry = new Button.with_label (_("Retry"));
+            var retry = new Button.with_label (_("Try Again"));
             retry.halign = Align.CENTER;
+            retry.add_css_class ("pill");
             retry.add_css_class ("suggested-action");
             retry.clicked.connect (on_discover_retry);
-            err_box.append (retry);
+            err_page.child = retry;
 
-            discover_box.append (err_box);
+            discover_box.append (err_page);
             discover_scroll.visible = true;
         }
 
@@ -652,11 +820,15 @@ namespace Singularity.Apps.Store {
             search_spinner.visible = false;
             outer.append (search_spinner);
 
-            search_status = new Label (_("Search for apps on Flathub"));
-            search_status.add_css_class ("dim-label");
-            search_status.halign = Align.CENTER;
-            search_status.valign = Align.CENTER;
+            search_status = new StatusPage ();
             search_status.vexpand = true;
+            search_status.visible = false;
+            search_status_button = new Button ();
+            search_status_button.halign = Align.CENTER;
+            search_status_button.add_css_class ("pill");
+            search_status_button.add_css_class ("suggested-action");
+            search_status_button.clicked.connect (on_search_status_clicked);
+            search_status.child = search_status_button;
             outer.append (search_status);
 
             search_result_box = new Box (Orientation.VERTICAL, 0);
@@ -682,7 +854,27 @@ namespace Singularity.Apps.Store {
             clear_box (search_result_box);
         }
 
+        private void show_search_status (string icon_name, string title, string description, bool clears) {
+            search_status_clears = clears;
+            search_status.icon_name = icon_name;
+            search_status.title = title;
+            search_status.description = description;
+            search_status_button.label = clears ? _("Clear Search") : _("Try Again");
+            search_status.visible = true;
+        }
+
+        private void on_search_status_clicked () {
+            if (search_status_clears) {
+                gtk_search_entry.text = "";
+            } else if (current_category != "") {
+                browse_category (current_category);
+            } else if (current_search_query != "") {
+                do_search (current_search_query);
+            }
+        }
+
         private void do_search (string query) {
+            current_category = "";
             show_search_view_loading ();
             main_stack.visible_child_name = "search";
             back_button.visible = true;
@@ -726,8 +918,11 @@ namespace Singularity.Apps.Store {
                 }
 
                 if (hits == null || hits.get_length () == 0) {
-                    search_status.label   = _("No apps found");
-                    search_status.visible = true;
+                    if (current_category != "") {
+                        show_search_status ("system-search", _("No Apps Found"), _("This category has no apps right now."), false);
+                    } else {
+                        show_search_status ("system-search", _("No Apps Found"), _("Nothing on Flathub matches “%s”. Try other words.").printf (current_search_query), true);
+                    }
                     return;
                 }
 
@@ -739,8 +934,7 @@ namespace Singularity.Apps.Store {
                 warning ("Search error: %s", e.message);
                 search_spinner.spinning = false;
                 search_spinner.visible  = false;
-                search_status.label     = _("Could not connect to Flathub");
-                search_status.visible   = true;
+                show_search_status ("network-error", _("Could Not Connect to Flathub"), _("Check your internet connection and try again."), false);
             }
         }
 
@@ -749,6 +943,7 @@ namespace Singularity.Apps.Store {
         // ============================================================
 
         private void browse_category (string category) {
+            current_category = category;
             show_search_view_loading ();
             main_stack.visible_child_name = "search";
 
@@ -784,6 +979,18 @@ namespace Singularity.Apps.Store {
             installed_scroll.visible = false;
             outer.append (installed_scroll);
 
+            installed_empty = new WelcomePage ();
+            installed_empty.is_section = true;
+            installed_empty.app_icon_name = "dev.sinty.store";
+            installed_empty.title = _("Installed");
+            installed_empty.subtitle = _("Apps you install from Flathub appear here");
+            installed_empty.add_action ("user-bookmarks", _("Browse Featured"), _("Apps picked by the Flathub editors"), () => activate_action ("show-featured", null));
+            installed_empty.add_action ("dev.sinty.store", _("Popular Apps"), _("The most downloaded apps on Flathub"), () => activate_action ("show-popular", null));
+            installed_empty.add_action ("system-search", _("Search Flathub"), _("Find an app by its name"), () => activate_action ("find", null));
+            installed_empty.vexpand = true;
+            installed_empty.visible = false;
+            outer.append (installed_empty);
+
             main_stack.add_named (outer, "installed");
         }
 
@@ -791,6 +998,7 @@ namespace Singularity.Apps.Store {
             installed_status.label   = _("Loading installed apps…");
             installed_status.visible = true;
             installed_scroll.visible = false;
+            installed_empty.visible = false;
             new Thread<bool> ("installed-apps", do_load_installed);
         }
 
@@ -831,14 +1039,11 @@ namespace Singularity.Apps.Store {
             clear_box (installed_box);
 
             if (installed_app_ids.length == 0) {
-                var lbl = new Label (_("No Flatpak apps installed"));
-                lbl.add_css_class ("dim-label");
-                lbl.halign    = Align.CENTER;
-                lbl.margin_top = 80;
-                installed_box.append (lbl);
-                installed_scroll.visible = true;
+                installed_scroll.visible = false;
+                installed_empty.visible = true;
                 return;
             }
+            installed_empty.visible = false;
 
             var list = new ListBox ();
             list.add_css_class ("boxed-list");
@@ -873,7 +1078,7 @@ namespace Singularity.Apps.Store {
 
             var icon = icon_name_resolved != null
                 ? new Image.from_icon_name (icon_name_resolved)
-                : new Image.from_icon_name ("application-x-executable-symbolic");
+                : new Image.from_icon_name ("application-x-executable");
             icon.pixel_size = 48;
             icon.add_css_class ("store-app-icon");
             hbox.append (icon);
@@ -961,6 +1166,18 @@ namespace Singularity.Apps.Store {
             updates_scroll.visible = false;
             outer.append (updates_scroll);
 
+            updates_done = new WelcomePage ();
+            updates_done.is_section = true;
+            updates_done.app_icon_name = "dev.sinty.store";
+            updates_done.title = _("Updates");
+            updates_done.subtitle = _("All apps are up to date");
+            updates_done.add_action ("emblem-synchronizing", _("Check Again"), _("Look for new versions now"), () => refresh_updates_async ());
+            updates_done.add_action ("user-bookmarks", _("Browse Featured"), _("Apps picked by the Flathub editors"), () => activate_action ("show-featured", null));
+            updates_done.add_action ("computer", _("Installed Apps"), _("Open or remove the apps you have"), () => activate_action ("show-installed", null));
+            updates_done.vexpand = true;
+            updates_done.visible = false;
+            outer.append (updates_done);
+
             main_stack.add_named (outer, "updates");
         }
 
@@ -968,45 +1185,30 @@ namespace Singularity.Apps.Store {
             updates_status.label   = _("Checking for updates…");
             updates_status.visible = true;
             updates_scroll.visible = false;
+            updates_done.visible = false;
             new Thread<bool> ("check-updates", do_check_updates);
         }
 
         private bool do_check_updates () {
-            string stdout_str = "";
-            string stderr_str = "";
-            int status_code   = 0;
-            try {
-                Process.spawn_command_line_sync (
-                    "flatpak --user remote-ls --updates --columns=application",
-                    out stdout_str, out stderr_str, out status_code);
-            } catch (Error e) {
-                warning ("Updates check error: %s", e.message);
-            }
-
-            string[] ids = {};
-            foreach (var line in stdout_str.split ("\n")) {
-                var trimmed = line.strip ();
-                if (trimmed != "") ids += trimmed;
-            }
-            pending_update_ids = ids;
+            pending_update_ids = UpdateBadge.list_update_ids ();
 
             Idle.add (on_updates_checked);
             return true;
         }
 
         private bool on_updates_checked () {
+            UpdateBadge.publish (get_dbus_connection (), pending_update_ids.length);
+            if (update_checker_autostart ().query_exists ()) wake_update_checker ();
             updates_status.visible = false;
             clear_box (updates_box);
+            update_all_action.set_enabled (pending_update_ids.length > 0);
 
             if (pending_update_ids.length == 0) {
-                var lbl = new Label (_("All apps are up to date."));
-                lbl.add_css_class ("dim-label");
-                lbl.halign    = Align.CENTER;
-                lbl.margin_top = 80;
-                updates_box.append (lbl);
-                updates_scroll.visible = true;
+                updates_scroll.visible = false;
+                updates_done.visible = true;
                 return false;
             }
+            updates_done.visible = false;
 
             var update_all_btn = new Button.with_label (_("Update All"));
             update_all_btn.add_css_class ("suggested-action");
@@ -1029,7 +1231,10 @@ namespace Singularity.Apps.Store {
                 hbox.margin_top    = 8;
                 hbox.margin_bottom = 8;
 
-                var icon = new Image.from_icon_name ("application-x-executable-symbolic");
+                string? update_icon_name = null;
+                var update_info = new GLib.DesktopAppInfo (app_id + ".desktop");
+                if (update_info != null && update_info.get_icon () != null) update_icon_name = update_info.get_icon ().to_string ();
+                var icon = new Image.from_icon_name (update_icon_name ?? "application-x-executable");
                 icon.pixel_size = 48;
                 icon.add_css_class ("store-app-icon");
                 hbox.append (icon);
@@ -1059,24 +1264,31 @@ namespace Singularity.Apps.Store {
         }
 
         private void on_update_all_clicked () {
+            run_update ({ "flatpak", "--user", "update", "-y" });
+        }
+
+        private void run_update (string[] argv) {
             try {
-                Process.spawn_command_line_async ("flatpak --user update -y");
+                var proc = new Subprocess.newv (argv, SubprocessFlags.NONE);
+                proc.wait_async.begin (null, (obj, res) => {
+                    try {
+                        proc.wait_async.end (res);
+                    } catch (Error e) {
+                        warning ("Update error: %s", e.message);
+                    }
+                    refresh_updates_async ();
+                });
             } catch (Error e) {
-                warning ("Update all error: %s", e.message);
+                warning ("Update error: %s", e.message);
             }
         }
 
         private void on_update_single_clicked (Button btn) {
             var app_id = btn.get_data<string> ("app-id");
             if (app_id == null) return;
-            try {
-                Process.spawn_command_line_async (
-                    "flatpak --user update -y " +GLib.Shell.quote (app_id));
-                btn.label     = _("Updating…");
-                btn.sensitive = false;
-            } catch (Error e) {
-                warning ("Update error: %s", e.message);
-            }
+            run_update ({ "flatpak", "--user", "update", "-y", app_id });
+            btn.label     = _("Updating…");
+            btn.sensitive = false;
         }
 
         // ============================================================
@@ -1135,7 +1347,7 @@ namespace Singularity.Apps.Store {
                 parser.load_from_data (json_str);
                 var root = parser.get_root ();
                 if (root == null || root.get_node_type () != Json.NodeType.OBJECT) {
-                    show_detail_error ("Could not load app details"); return;
+                    show_detail_error (_("Flathub sent no details for this app.")); return;
                 }
                 var app_obj = root.get_object ();
                 var info    = new AppInfo ();
@@ -1182,17 +1394,24 @@ namespace Singularity.Apps.Store {
                 populate_detail (info);
             } catch (Error e) {
                 warning ("Detail error: %s", e.message);
-                show_detail_error ("Could not load app details: " + e.message);
+                show_detail_error (e.message);
             }
         }
 
         private void show_detail_error (string message) {
             clear_box (detail_box);
-            var lbl = new Label (message);
-            lbl.add_css_class ("dim-label");
-            lbl.halign    = Align.CENTER;
-            lbl.margin_top = 80;
-            detail_box.append (lbl);
+            var page = new StatusPage ();
+            page.vexpand = true;
+            page.icon_name = "network-error";
+            page.title = _("Could Not Load App Details");
+            page.description = message;
+            var retry = new Button.with_label (_("Try Again"));
+            retry.halign = Align.CENTER;
+            retry.add_css_class ("pill");
+            retry.add_css_class ("suggested-action");
+            retry.clicked.connect (() => show_app_detail (current_detail_app_id));
+            page.child = retry;
+            detail_box.append (page);
         }
 
         private void populate_detail (AppInfo info) {
@@ -1202,7 +1421,7 @@ namespace Singularity.Apps.Store {
             var header = new Box (Orientation.HORIZONTAL, 24);
             header.margin_bottom = 24;
 
-            var icon = new Image.from_icon_name ("application-x-executable-symbolic");
+            var icon = new Image.from_icon_name ("application-x-executable");
             icon.pixel_size = 128;
             icon.add_css_class ("store-app-icon");
             icon.valign = Align.START;
@@ -1688,7 +1907,7 @@ namespace Singularity.Apps.Store {
             vb.margin_top    = 4;
             vb.margin_bottom = 4;
 
-            var icon = new Image.from_icon_name ("application-x-executable-symbolic");
+            var icon = new Image.from_icon_name ("application-x-executable");
             icon.pixel_size = 72;
             icon.add_css_class ("store-app-icon");
             icon.halign = Align.CENTER;
@@ -1739,7 +1958,7 @@ namespace Singularity.Apps.Store {
             card.add_controller (gesture);
 
             // Icon
-            var icon = new Image.from_icon_name ("application-x-executable-symbolic");
+            var icon = new Image.from_icon_name ("application-x-executable");
             icon.pixel_size = 64;
             icon.add_css_class ("store-app-icon");
             icon.valign = Align.CENTER;
@@ -1952,7 +2171,39 @@ namespace Singularity.Apps.Store {
             Gtk.StyleContext.add_provider_for_display (
                 Gdk.Display.get_default (), provider,
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+            var button_provider = new Gtk.CssProvider ();
+            button_provider.load_from_string (INSTALL_BUTTON_CSS);
+            Gtk.StyleContext.add_provider_for_display (
+                Gdk.Display.get_default (), button_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
         }
+
+        private const string INSTALL_BUTTON_CSS = """
+button.store-install-btn {
+    border-radius: 20px;
+    padding: 5px 18px;
+    background: @accent_color;
+    font-weight: 700;
+    font-size: 13px;
+    min-width: 64px;
+}
+
+button.store-install-btn label {
+    color: @accent_fg_color;
+}
+
+button.store-install-btn:hover {
+    background: mix(@accent_color, white, 0.85);
+}
+
+button.store-install-btn.installed {
+    background: alpha(@text_color, 0.10);
+}
+
+button.store-install-btn.installed label {
+    color: @window_fg_color;
+}
+""";
 
         private const string STORE_CSS = """
 /* Store App */
@@ -1988,97 +2239,10 @@ namespace Singularity.Apps.Store {
     border-radius: 14px;
 }
 
-.store-install-btn {
-    border-radius: 20px;
-    padding: 5px 18px;
-    background-color: alpha(@accent_color, 0.18);
-    color: @accent_color;
-    font-weight: 700;
-    font-size: 13px;
-    min-width: 64px;
-}
-
-.store-install-btn:hover {
-    background-color: alpha(@accent_color, 0.30);
-}
-
-.store-install-btn.installed {
-    background-color: alpha(@text_color, 0.10);
-    color: @window_fg_color;
-}
-
 .store-section-title {
     font-size: 18px;
     font-weight: bold;
     margin: 16px 0 8px 0;
-}
-
-.store-sidebar-item {
-    border-radius: 8px;
-    padding: 8px 12px;
-}
-
-.store-sidebar-item:hover {
-    background-color: alpha(@text_color, 0.08);
-}
-
-.store-sidebar-item.selected {
-    background-color: alpha(@accent_color, 0.2);
-    color: @accent_color;
-}
-
-.store-rating {
-    color: @accent_color;
-}
-
-/* Store Search */
-.store-search,
-.store-search-entry {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    outline: none;
-    min-width: 280px;
-}
-
-.store-search:focus,
-.store-search-entry:focus {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-}
-
-/* Override the inner entry/text nodes that inherit dark background */
-/* Override inner nodes of .store-search SearchEntry */
-.store-search entry,
-.store-search text,
-.store-search>text {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    color: inherit;
-}
-
-searchentry.store-search,
-searchentry.store-search:focus,
-searchentry.store-search:focus-within {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
-}
-
-searchentry.store-search text,
-searchentry.store-search entry {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
 }
 
 /* Store card typography */
@@ -2095,14 +2259,6 @@ searchentry.store-search entry {
 .store-app-summary {
     font-size: 12px;
     opacity: 0.65;
-}
-
-.store-app-category {
-    font-size: 10px;
-    border-radius: 8px;
-    padding: 2px 8px;
-    background: alpha(@text_color, 0.1);
-    opacity: 0.7;
 }
 
 /* Store Reviews */

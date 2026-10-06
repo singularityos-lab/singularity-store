@@ -20,6 +20,10 @@ namespace Singularity.Apps.Store {
             toolbar.is_static = true;
 
             sidebar = new Singularity.Widgets.AppSidebar();
+
+            var close_action = new SimpleAction("close", null);
+            close_action.activate.connect(() => close());
+            add_action(close_action);
         }
     }
 }

@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=dev.sinty.store.Updates
+Exec=@bindir@/singularity-store-updates

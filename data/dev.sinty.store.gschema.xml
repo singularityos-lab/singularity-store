@@ -9,5 +9,9 @@
       <default>'discover'</default>
       <summary>Current view</summary>
     </key>
+    <key name="update-check-added" type="b">
+      <default>false</default>
+      <summary>Whether the background update check was added to autostart</summary>
+    </key>
   </schema>
 </schemalist>
