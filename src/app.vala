@@ -1808,19 +1808,35 @@ namespace Singularity.Apps.Store {
         private void on_detail_remove_clicked (Button btn) {
             var app_id = btn.get_data<string> ("app-id");
             if (app_id == null) return;
+            btn.label     = _("Removing…");
+            btn.sensitive = false;
+            remove_app.begin (app_id, btn);
+        }
+
+        private async void remove_app (string app_id, Button btn) {
             try {
-                Process.spawn_command_line_async (
-                    "flatpak --user uninstall -y " + GLib.Shell.quote (app_id));
-                btn.label     = _("Removing…");
-                btn.sensitive = false;
+                var proc = new Subprocess.newv ({"flatpak", "--user", "uninstall", "-y", app_id},
+                    SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE);
+                yield proc.wait_async ();
+                if (proc.get_successful ()) {
+                    btn.label = _("Removed");
+                } else {
+                    btn.label = _("Remove");
+                    btn.sensitive = true;
+                }
             } catch (Error e) {
                 warning ("Remove error: %s", e.message);
+                btn.label = _("Remove");
+                btn.sensitive = true;
             }
+            do_load_installed ();
         }
 
         private void on_detail_install_clicked (Button btn) {
             var app_id = btn.get_data<string> ("app-id");
-            if (app_id != null) install_app (app_id, btn);
+            if (app_id == null) return;
+            if (btn.get_data<bool> ("store-installed")) launch_app (app_id);
+            else install_app (app_id, btn);
         }
 
         // ============================================================
@@ -2014,7 +2030,7 @@ namespace Singularity.Apps.Store {
             }
             install_btn.valign = Align.CENTER;
             install_btn.clicked.connect (() => {
-                if (captured_installed) {
+                if (captured_installed || install_btn.get_data<bool> ("store-installed")) {
                     launch_app (captured_id);
                 } else {
                     install_app (captured_id, install_btn);
@@ -2053,29 +2069,69 @@ namespace Singularity.Apps.Store {
             install_app_with_logs.begin (app_id, btn);
         }
 
+        private void append_install_log (string line) {
+            TextIter iter;
+            install_log_text.buffer.get_end_iter (out iter);
+            install_log_text.buffer.insert (ref iter, line + "\n", -1);
+            var mark = install_log_text.buffer.get_insert ();
+            install_log_text.scroll_to_mark (mark, 0.0, true, 0.5, 1.0);
+        }
+
+        private static int install_percent (string line) {
+            int end = line.last_index_of_char ('%');
+            if (end <= 0) return -1;
+            int start = end;
+            while (start > 0 && line[start - 1].isdigit ()) start--;
+            if (start == end) return -1;
+            return int.parse (line.substring (start, end - start)).clamp (0, 100);
+        }
+
         private async void install_app_with_logs (string app_id, Button? btn) {
             try {
-                var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_PIPE);
-                var proc = launcher.spawnv ({"flatpak", "--user", "install", "-y", "flathub", app_id});
+                var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_MERGE);
+                var proc = launcher.spawnv ({"flatpak", "--user", "install", "-y", "--noninteractive", "flathub", app_id});
 
-                // Read stdout in real-time
-                var stdout_stream = new DataInputStream (proc.get_stdout_pipe ());
-                string? line;
-                while ((line = yield stdout_stream.read_line_async ()) != null) {
-                    TextIter iter;
-                    install_log_text.buffer.get_end_iter (out iter);
-                    install_log_text.buffer.insert (ref iter, line + "\n", -1);
-
-                    // Auto-scroll to bottom
-                    var mark = install_log_text.buffer.get_insert ();
-                    install_log_text.scroll_to_mark (mark, 0.0, true, 0.5, 1.0);
+                var stream = proc.get_stdout_pipe ();
+                var pending = new StringBuilder ();
+                string last = "";
+                while (true) {
+                    var chunk = yield stream.read_bytes_async (4096);
+                    if (chunk.get_size () == 0) break;
+                    pending.append_len ((string) chunk.get_data (), (ssize_t) chunk.get_size ());
+                    while (true) {
+                        int cut = -1;
+                        for (int i = 0; i < pending.len; i++) {
+                            if (pending.str[i] == '\n' || pending.str[i] == '\r') {
+                                cut = i;
+                                break;
+                            }
+                        }
+                        if (cut < 0) break;
+                        string line = pending.str.substring (0, cut).strip ();
+                        pending.erase (0, cut + 1);
+                        if (line == "" || line == last) continue;
+                        last = line;
+                        int percent = install_percent (line);
+                        if (percent >= 0 && btn != null) btn.label = _("Installing… %d%%").printf (percent);
+                        else append_install_log (line);
+                    }
                 }
+                if (pending.len > 0) append_install_log (pending.str.strip ());
 
                 yield proc.wait_async ();
+                if (!proc.get_successful ()) {
+                    append_install_log (_("The installation did not complete."));
+                    if (btn != null) {
+                        btn.label     = _("Get");
+                        btn.sensitive = true;
+                    }
+                    return;
+                }
 
                 if (btn != null) {
-                    btn.label = _("Installed");
+                    btn.label = _("Open");
                     btn.add_css_class ("installed");
+                    btn.set_data<bool> ("store-installed", true);
                     btn.sensitive = true;
                 }
 
