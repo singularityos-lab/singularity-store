@@ -87,6 +87,7 @@ namespace Singularity.Apps.Store {
         private Spinner collection_spinner;
         private ScrolledWindow collection_scroll;
         private Box collection_box;
+        private bool collection_refreshed = false;
 
         // ============================================================
         // Lifecycle
@@ -2036,10 +2037,13 @@ namespace Singularity.Apps.Store {
 
             string captured_id        = info.app_id;
             bool   captured_installed = info.is_installed;
+            Button? card_button = null;
 
             // Click anywhere on the card (except the button), open detail
             var gesture = new GestureClick ();
             gesture.pressed.connect ((n, x, y) => {
+                var target = card.pick (x, y, PickFlags.DEFAULT);
+                if (target != null && card_button != null && (target == card_button || target.is_ancestor (card_button))) return;
                 if (captured_id != "") show_app_detail (captured_id);
             });
             card.add_controller (gesture);
@@ -2096,6 +2100,7 @@ namespace Singularity.Apps.Store {
 
             // Install / Open button on far right
             var install_btn = new Button.with_label (captured_installed ? _("Open") : _("Get"));
+            card_button = install_btn;
             install_btn.add_css_class ("store-install-btn");
             if (captured_installed) {
                 install_btn.add_css_class ("installed");
@@ -2173,6 +2178,14 @@ namespace Singularity.Apps.Store {
             }
             populate_collection ();
             if (main_stack.visible_child_name == "installed") populate_installed_view ();
+            if (sxi_apps.size == 0 && !collection_refreshed) {
+                collection_refreshed = true;
+                try {
+                    yield sxi.refresh ();
+                } catch (Error e) {
+                    warning ("Collection refresh: %s", e.message);
+                }
+            }
         }
 
         private bool in_collection (Json.Object app, string name) {
