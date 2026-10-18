@@ -79,6 +79,15 @@ namespace Singularity.Apps.Store {
         private Expander install_log_expander;
         private TextView install_log_text;
 
+        private SxiClient sxi = new SxiClient ();
+        private Gee.HashMap<string, Json.Object> sxi_apps = new Gee.HashMap<string, Json.Object> ();
+        private Gee.HashMap<string, Json.Object> sxi_installed = new Gee.HashMap<string, Json.Object> ();
+        private Gee.HashMap<string, Button> sxi_buttons = new Gee.HashMap<string, Button> ();
+        private Button collection_btn;
+        private Spinner collection_spinner;
+        private ScrolledWindow collection_scroll;
+        private Box collection_box;
+
         // ============================================================
         // Lifecycle
         // ============================================================
@@ -298,9 +307,11 @@ namespace Singularity.Apps.Store {
             setup_installed_view ();
             setup_updates_view ();
             setup_detail_view ();
+            setup_collection_view ();
 
             main_window.set_content (main_stack);
             main_window.present ();
+            connect_collection.begin ();
 
             installed_load_then_discover = true;
             refresh_installed_async ();
@@ -393,6 +404,17 @@ namespace Singularity.Apps.Store {
             var sidebar = main_window.sidebar;
             var box = sidebar.box;
 
+            collection_btn = make_sidebar_button (_("Singularity"), "view-grid-symbolic");
+            collection_btn.visible = false;
+            collection_btn.clicked.connect (() => {
+                set_sidebar_active (collection_btn);
+                current_nav = "collection";
+                show_view ("collection");
+                gtk_search_entry.text = "";
+                back_button.visible = false;
+            });
+            box.append (collection_btn);
+
             var featured_btn = make_sidebar_button ("Featured", "starred-symbolic");
             featured_btn.clicked.connect (() => {
                 set_sidebar_active (featured_btn);
@@ -484,6 +506,7 @@ namespace Singularity.Apps.Store {
             });
             box.append(updates_btn);
 
+            add_nav_action ("show-collection", collection_btn);
             add_nav_action ("show-featured", featured_btn);
             add_nav_action ("show-popular", popular_btn);
             add_nav_action ("show-recent", recent_btn);
@@ -528,6 +551,8 @@ namespace Singularity.Apps.Store {
                 refresh_installed_async ();
             } else if (view_id == "updates") {
                 refresh_updates_async ();
+            } else if (view_id == "collection") {
+                load_collection.begin ();
             }
         }
 
@@ -897,6 +922,7 @@ namespace Singularity.Apps.Store {
         }
 
         private void on_search_response (Object? obj, AsyncResult res) {
+            int local = current_category == "" ? append_collection_matches (current_search_query) : 0;
             try {
                 var bytes    = http_session.send_and_read_async.end (res);
                 var json_str = (string) bytes.get_data ();
@@ -918,6 +944,10 @@ namespace Singularity.Apps.Store {
                 }
 
                 if (hits == null || hits.get_length () == 0) {
+                    if (local > 0) {
+                        search_scroll.visible = true;
+                        return;
+                    }
                     if (current_category != "") {
                         show_search_status ("system-search", _("No Apps Found"), _("This category has no apps right now."), false);
                     } else {
@@ -934,6 +964,10 @@ namespace Singularity.Apps.Store {
                 warning ("Search error: %s", e.message);
                 search_spinner.spinning = false;
                 search_spinner.visible  = false;
+                if (local > 0) {
+                    search_scroll.visible = true;
+                    return;
+                }
                 show_search_status ("network-error", _("Could Not Connect to Flathub"), _("Check your internet connection and try again."), false);
             }
         }
@@ -1038,7 +1072,11 @@ namespace Singularity.Apps.Store {
             installed_status.visible = false;
             clear_box (installed_box);
 
-            if (installed_app_ids.length == 0) {
+            string[] ids = installed_app_ids;
+            foreach (var sxi_id in sxi_installed.keys) {
+                if (!(sxi_id in ids)) ids += sxi_id;
+            }
+            if (ids.length == 0) {
                 installed_scroll.visible = false;
                 installed_empty.visible = true;
                 return;
@@ -1049,7 +1087,7 @@ namespace Singularity.Apps.Store {
             list.add_css_class ("boxed-list");
             list.selection_mode = SelectionMode.NONE;
 
-            foreach (var app_id in installed_app_ids) {
+            foreach (var app_id in ids) {
                 if (app_id.strip () == "") continue;
                 list.append (make_installed_row (app_id));
             }
@@ -1074,6 +1112,8 @@ namespace Singularity.Apps.Store {
                 display_name = desktop_info.get_display_name () ?? app_id;
                 var gicon = desktop_info.get_icon ();
                 if (gicon != null) icon_name_resolved = gicon.to_string ();
+            } else if (sxi_installed.has_key (app_id)) {
+                display_name = obj_str (sxi_installed[app_id], "name");
             }
 
             var icon = icon_name_resolved != null
@@ -1131,6 +1171,19 @@ namespace Singularity.Apps.Store {
             var app_id = btn.get_data<string> ("app-id");
             var row    = btn.get_data<ListBoxRow> ("row");
             if (app_id == null) return;
+            if (sxi_installed.has_key (app_id)) {
+                btn.sensitive = false;
+                sxi.remove.begin (app_id, (obj, res) => {
+                    try {
+                        sxi.remove.end (res);
+                        if (row != null) row.visible = false;
+                    } catch (Error e) {
+                        warning ("Remove error: %s", e.message);
+                        btn.sensitive = true;
+                    }
+                });
+                return;
+            }
             try {
                 Process.spawn_command_line_async (
                     "flatpak --user uninstall -y " + GLib.Shell.quote (app_id));
@@ -1328,6 +1381,11 @@ namespace Singularity.Apps.Store {
             back_button.visible           = true;
             clear_box (detail_box);
 
+            if (sxi_apps.has_key (app_id)) {
+                populate_detail (sxi_info (sxi_apps[app_id]));
+                return;
+            }
+
             var sp = make_spinner ();
             sp.margin_top = 80;
             detail_box.append (sp);
@@ -1435,6 +1493,7 @@ namespace Singularity.Apps.Store {
             name_lbl.add_css_class ("title-1");
             name_lbl.xalign = 0;
             meta.append (name_lbl);
+            if (info.official) meta.append (make_official_badge ());
 
             if (info.developer != "") {
                 var dev_lbl = new Label (info.developer);
@@ -1521,6 +1580,7 @@ namespace Singularity.Apps.Store {
             }
 
             // Permissions section (Play Store style)
+            if (info.source == "sxi") return;
             var perm_box = new Box (Orientation.VERTICAL, 8);
             perm_box.margin_top = 24;
             detail_box.append (perm_box);
@@ -1814,6 +1874,17 @@ namespace Singularity.Apps.Store {
         }
 
         private async void remove_app (string app_id, Button btn) {
+            if (sxi_installed.has_key (app_id)) {
+                try {
+                    yield sxi.remove (app_id);
+                    btn.label = _("Removed");
+                } catch (Error e) {
+                    warning ("Remove error: %s", e.message);
+                    btn.label = _("Remove");
+                    btn.sensitive = true;
+                }
+                return;
+            }
             try {
                 var proc = new Subprocess.newv ({"flatpak", "--user", "uninstall", "-y", app_id},
                     SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE);
@@ -1990,6 +2061,7 @@ namespace Singularity.Apps.Store {
             name_lbl.xalign    = 0;
             name_lbl.ellipsize = EllipsizeMode.END;
             info_box.append (name_lbl);
+            if (info.official) info_box.append (make_official_badge ());
 
             // Developer: use field if present, else extract from app_id
             string developer = info.developer;
@@ -2049,7 +2121,204 @@ namespace Singularity.Apps.Store {
         // Flatpak operations
         // ============================================================
 
+        private void setup_collection_view () {
+            var outer = new Box (Orientation.VERTICAL, 0);
+
+            collection_spinner = make_spinner ();
+            collection_spinner.visible = false;
+            outer.append (collection_spinner);
+
+            collection_box = new Box (Orientation.VERTICAL, 0);
+            collection_box.margin_start  = 12;
+            collection_box.margin_end    = 12;
+            collection_box.margin_top    = 8;
+            collection_box.margin_bottom = 24;
+
+            collection_scroll = new ScrolledWindow ();
+            collection_scroll.set_child (collection_box);
+            collection_scroll.vexpand = true;
+            outer.append (collection_scroll);
+
+            main_stack.add_named (outer, "collection");
+        }
+
+        private async void connect_collection () {
+            yield sxi.open ();
+            sxi.changed.connect (() => load_collection.begin ());
+            sxi.progress.connect (on_sxi_progress);
+            sxi.finished.connect (on_sxi_finished);
+            yield load_collection ();
+        }
+
+        private async void load_collection () {
+            collection_btn.visible = sxi.available;
+            if (!sxi.available) return;
+            var available = yield sxi.list_available ();
+            var installed = yield sxi.list_installed ();
+            sxi_apps.clear ();
+            sxi_installed.clear ();
+            if (installed != null) {
+                installed.foreach_element ((arr, i, node) => {
+                    if (node.get_node_type () != Json.NodeType.OBJECT) return;
+                    var app = node.get_object ();
+                    sxi_installed[obj_str (app, "id")] = app;
+                });
+            }
+            if (available != null) {
+                available.foreach_element ((arr, i, node) => {
+                    if (node.get_node_type () != Json.NodeType.OBJECT) return;
+                    var app = node.get_object ();
+                    sxi_apps[obj_str (app, "id")] = app;
+                });
+            }
+            populate_collection ();
+            if (main_stack.visible_child_name == "installed") populate_installed_view ();
+        }
+
+        private bool in_collection (Json.Object app, string name) {
+            if (!app.has_member ("collections")) return false;
+            var node = app.get_member ("collections");
+            if (node.get_node_type () != Json.NodeType.ARRAY) return false;
+            var list = node.get_array ();
+            for (uint i = 0; i < list.get_length (); i++) {
+                if (list.get_string_element (i) == name) return true;
+            }
+            return false;
+        }
+
+        private void populate_collection () {
+            clear_box (collection_box);
+            var ids = new Gee.ArrayList<string> ();
+            ids.add_all (sxi_apps.keys);
+            ids.sort ((a, b) => strcmp (obj_str (sxi_apps[a], "name").casefold (), obj_str (sxi_apps[b], "name").casefold ()));
+            if (ids.size == 0) {
+                var empty = new StatusPage ();
+                empty.vexpand = true;
+                empty.icon_name = "view-grid-symbolic";
+                empty.title = _("No Apps Yet");
+                empty.description = _("The collections you follow have not published any app.");
+                collection_box.append (empty);
+                return;
+            }
+            bool essentials = false;
+            foreach (var id in ids) {
+                if (!in_collection (sxi_apps[id], "essentials")) continue;
+                if (!essentials) {
+                    collection_box.append (make_section_label (_("Essentials")));
+                    essentials = true;
+                }
+                collection_box.append (make_app_card (sxi_info (sxi_apps[id])));
+            }
+            bool more = false;
+            foreach (var id in ids) {
+                if (in_collection (sxi_apps[id], "essentials")) continue;
+                if (!more) {
+                    var label = make_section_label (essentials ? _("More Apps") : _("Apps"));
+                    if (essentials) label.margin_top = 20;
+                    collection_box.append (label);
+                    more = true;
+                }
+                collection_box.append (make_app_card (sxi_info (sxi_apps[id])));
+            }
+        }
+
+        private AppInfo sxi_info (Json.Object app) {
+            var info = new AppInfo ();
+            info.source      = "sxi";
+            info.app_id      = obj_str (app, "id");
+            info.name        = obj_str (app, "name");
+            if (info.name == "") info.name = info.app_id;
+            info.summary     = obj_str (app, "summary");
+            info.description = obj_str (app, "description");
+            var icon = obj_str (app, "icon");
+            info.icon_url    = icon != "" ? icon : null;
+            info.official    = app.has_member ("official") && app.get_boolean_member ("official");
+            info.developer   = info.official ? "Singularity" : obj_str (app, "source");
+            if (app.has_member ("releases")) {
+                var releases = app.get_array_member ("releases");
+                if (releases.get_length () > 0) {
+                    info.version_str = obj_str (releases.get_object_element (0), "version");
+                }
+            }
+            info.is_installed = sxi_installed.has_key (info.app_id);
+            return info;
+        }
+
+        private Widget make_official_badge () {
+            var badge = new Box (Orientation.HORIZONTAL, 4);
+            badge.halign = Align.START;
+            badge.add_css_class ("store-official-badge");
+            var mark = new Image.from_icon_name ("emblem-ok-symbolic");
+            mark.pixel_size = 12;
+            badge.append (mark);
+            badge.append (new Label (_("Singularity Collection")));
+            badge.tooltip_text = _("Signed by Singularity and verified by this system");
+            return badge;
+        }
+
+        private int append_collection_matches (string query) {
+            string q = query.strip ().casefold ();
+            if (q == "") return 0;
+            int count = 0;
+            foreach (var app in sxi_apps.values) {
+                string haystack = "%s %s %s".printf (obj_str (app, "name"), obj_str (app, "summary"), obj_str (app, "id")).casefold ();
+                if (!haystack.contains (q)) continue;
+                search_result_box.append (make_app_card (sxi_info (app)));
+                count++;
+            }
+            return count;
+        }
+
+        private void install_sxi (string app_id, Button? btn) {
+            if (btn != null) {
+                btn.label     = _("Installing…");
+                btn.sensitive = false;
+                sxi_buttons[app_id] = btn;
+            }
+            sxi.install.begin (app_id, (obj, res) => {
+                try {
+                    sxi.install.end (res);
+                } catch (Error e) {
+                    on_sxi_finished (app_id, e.message);
+                }
+            });
+        }
+
+        private void on_sxi_progress (string app_id, string stage, int64 done, int64 total) {
+            var btn = sxi_buttons[app_id];
+            if (btn == null) return;
+            if (stage == "download" && total > 0) {
+                btn.label = _("Installing… %d%%").printf ((int) (done * 100 / total));
+            } else if (stage == "verify") {
+                btn.label = _("Verifying…");
+            }
+        }
+
+        private void on_sxi_finished (string app_id, string error) {
+            var btn = sxi_buttons[app_id];
+            sxi_buttons.unset (app_id);
+            if (btn != null) {
+                if (error == "") {
+                    btn.label = _("Open");
+                    btn.add_css_class ("installed");
+                    btn.set_data<bool> ("store-installed", true);
+                } else {
+                    btn.label = _("Get");
+                }
+                btn.sensitive = true;
+            }
+            if (error != "") {
+                warning ("Install error: %s", error);
+                if (current_detail_app_id == app_id && main_stack.visible_child_name == "detail") {
+                    install_log_text.buffer.text = error + "\n";
+                    install_log_expander.visible = true;
+                    install_log_expander.expanded = true;
+                }
+            }
+        }
+
         private bool is_app_installed (string app_id) {
+            if (sxi_installed.has_key (app_id)) return true;
             foreach (var id in installed_app_ids) {
                 if (id == app_id) return true;
             }
@@ -2057,6 +2326,10 @@ namespace Singularity.Apps.Store {
         }
 
         private void install_app (string app_id, Button? btn) {
+            if (sxi_apps.has_key (app_id)) {
+                install_sxi (app_id, btn);
+                return;
+            }
             if (btn != null) {
                 btn.label     = _("Installing…");
                 btn.sensitive = false;
@@ -2157,6 +2430,19 @@ namespace Singularity.Apps.Store {
         }
 
         private void launch_app (string app_id) {
+            if (sxi_installed.has_key (app_id)) {
+                var entry = new GLib.DesktopAppInfo (app_id + ".desktop");
+                if (entry == null) {
+                    warning ("Launch error: no desktop entry for %s", app_id);
+                    return;
+                }
+                try {
+                    entry.launch (null, null);
+                } catch (Error e) {
+                    warning ("Launch error: %s", e.message);
+                }
+                return;
+            }
             try {
                 Process.spawn_command_line_async (
                     "flatpak run " + GLib.Shell.quote (app_id));
@@ -2315,6 +2601,12 @@ button.store-install-btn.installed label {
 .store-app-summary {
     font-size: 12px;
     opacity: 0.65;
+}
+
+.store-official-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: @accent_color;
 }
 
 /* Store Reviews */

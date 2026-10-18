@@ -18,5 +18,7 @@ namespace Singularity.Apps.Store {
         public string? category { get; set; default = null; }
         public string[] permissions { get; set; default = {}; }
         public string[] screenshot_urls { get; set; default = {}; }
+        public string source { get; set; default = "flathub"; }
+        public bool official { get; set; default = false; }
     }
 }
