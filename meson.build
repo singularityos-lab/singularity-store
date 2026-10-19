@@ -38,6 +38,7 @@ resources = gnome.compile_resources(
 sources = files(
   'src/app_info.vala',
   'src/sxi_client.vala',
+  'src/welcome_dialog.vala',
   'src/window.vala',
   'src/app.vala',
   'src/update_badge.vala',

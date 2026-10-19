@@ -80,6 +80,7 @@ namespace Singularity.Apps.Store {
         private TextView install_log_text;
 
         private SxiClient sxi = new SxiClient ();
+        private WelcomeDialog? welcome = null;
         private Gee.HashMap<string, Json.Object> sxi_apps = new Gee.HashMap<string, Json.Object> ();
         private Gee.HashMap<string, Json.Object> sxi_installed = new Gee.HashMap<string, Json.Object> ();
         private Gee.HashMap<string, Button> sxi_buttons = new Gee.HashMap<string, Button> ();
@@ -2149,10 +2150,30 @@ namespace Singularity.Apps.Store {
 
         private async void connect_collection () {
             yield sxi.open ();
+            show_welcome ();
             sxi.changed.connect (() => load_collection.begin ());
             sxi.progress.connect (on_sxi_progress);
             sxi.finished.connect (on_sxi_finished);
             yield load_collection ();
+            if (welcome != null) {
+                string[] icons = {};
+                foreach (var app in sxi_apps.values) {
+                    var icon = obj_str (app, "icon");
+                    if (icon != "") icons += icon;
+                }
+                welcome.set_collection_icons (icons);
+            }
+        }
+
+        private void show_welcome () {
+            if (store_settings == null || !store_settings.get_boolean ("show-welcome")) return;
+            welcome = new WelcomeDialog (this, main_window, sxi.available);
+            welcome.discover_collection.connect (() => activate_action ("show-collection", null));
+            welcome.dismissed.connect ((show_again) => {
+                if (!show_again) store_settings.set_boolean ("show-welcome", false);
+                welcome = null;
+            });
+            welcome.open_dialog ();
         }
 
         private async void load_collection () {

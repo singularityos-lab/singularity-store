@@ -9,6 +9,10 @@
       <default>'discover'</default>
       <summary>Current view</summary>
     </key>
+    <key name="show-welcome" type="b">
+      <default>true</default>
+      <summary>Show the welcome dialog when the Store opens</summary>
+    </key>
     <key name="update-check-added" type="b">
       <default>false</default>
       <summary>Whether the background update check was added to autostart</summary>
