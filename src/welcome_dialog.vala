@@ -315,7 +315,7 @@ namespace Singularity.Apps.Store {
             if (!url.has_prefix ("http://") && !url.has_prefix ("https://")) {
                 try {
                     var file = url.has_prefix ("file://") ? File.new_for_uri (url) : File.new_for_path (url);
-                    scene.add_icon (Gdk.Texture.from_file (file));
+                    scene.add_icon (icon_paintable_from_bytes (file.load_bytes (), 128));
                 } catch (Error e) {
                 }
                 return;
@@ -324,9 +324,7 @@ namespace Singularity.Apps.Store {
             session.send_and_read_async.begin (msg, Priority.LOW, null, (obj, res) => {
                 try {
                     var bytes = session.send_and_read_async.end (res);
-                    var stream = new MemoryInputStream.from_bytes (bytes);
-                    var pixbuf = new Gdk.Pixbuf.from_stream_at_scale (stream, 128, 128, true, null);
-                    scene.add_icon (Gdk.Texture.for_pixbuf (pixbuf));
+                    scene.add_icon (icon_paintable_from_bytes (bytes, 128));
                 } catch (Error e) {
                 }
             });

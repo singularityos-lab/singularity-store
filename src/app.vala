@@ -1942,12 +1942,11 @@ namespace Singularity.Apps.Store {
             http_session.send_and_read_async.begin (msg, GLib.Priority.LOW, null, (obj, res) => {
                 try {
                     var bytes  = http_session.send_and_read_async.end (res);
-                    var stream = new GLib.MemoryInputStream.from_bytes (bytes);
                     int sz     = image.pixel_size > 0 ? image.pixel_size : 64;
-                    var pixbuf = new Gdk.Pixbuf.from_stream_at_scale (stream, sz, sz, true, null);
+                    var icon   = icon_paintable_from_bytes (bytes, sz);
                     var stored = image.get_data<string> ("icon-url");
                     if (stored != null && stored == icon_url) {
-                        image.set_from_pixbuf (pixbuf);
+                        image.set_from_paintable (icon);
                     }
                 } catch (Error e) { /* keep placeholder */ }
             });
