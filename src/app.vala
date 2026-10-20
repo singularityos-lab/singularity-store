@@ -35,6 +35,7 @@ namespace Singularity.Apps.Store {
         private string current_search_query = "";
         private string current_detail_app_id = "";
         private string? startup_view = null;
+        private string? startup_query = null;
 
         // Discover widgets
         private Spinner discover_spinner;
@@ -98,12 +99,33 @@ namespace Singularity.Apps.Store {
             Object (application_id: "dev.sinty.store", flags: ApplicationFlags.FLAGS_NONE);
             add_main_option ("updates", 0, OptionFlags.NONE, OptionArg.NONE, _("Show available updates"), null);
             add_main_option ("installed", 0, OptionFlags.NONE, OptionArg.NONE, _("Show installed apps"), null);
+            add_main_option ("plugins", 0, OptionFlags.NONE, OptionArg.NONE, _("Show plugins for your apps"), null);
+            add_main_option ("search", 0, OptionFlags.NONE, OptionArg.STRING, _("Search the catalog"), _("QUERY"));
+            var search_action = new SimpleAction ("search", VariantType.STRING);
+            search_action.activate.connect ((v) => open_search (v.get_string ()));
+            add_action (search_action);
         }
 
         protected override int handle_local_options (GLib.VariantDict options) {
             string? view = null;
+            string? query = null;
+            options.lookup ("search", "s", out query);
+            if (query != null && query.strip () != "") {
+                try {
+                    register ();
+                } catch (Error e) {
+                    return 1;
+                }
+                if (!get_is_remote ()) {
+                    startup_query = query;
+                    return -1;
+                }
+                activate_action ("search", new GLib.Variant.string (query));
+                return 0;
+            }
             if (options.contains ("updates")) view = "show-updates";
             else if (options.contains ("installed")) view = "show-installed";
+            else if (options.contains ("plugins")) view = "show-plugins";
             if (view == null) return -1;
             try {
                 register ();
@@ -310,6 +332,7 @@ namespace Singularity.Apps.Store {
             setup_updates_view ();
             setup_detail_view ();
             setup_collection_view ();
+            setup_plugins_view ();
 
             main_window.set_content (main_stack);
             main_window.present ();
@@ -321,6 +344,10 @@ namespace Singularity.Apps.Store {
             if (startup_view != null) {
                 activate_action (startup_view, null);
                 startup_view = null;
+            }
+            if (startup_query != null) {
+                open_search (startup_query);
+                startup_query = null;
             }
         }
 
@@ -508,6 +535,17 @@ namespace Singularity.Apps.Store {
             });
             box.append(updates_btn);
 
+            var plugins_btn = make_sidebar_button (_("Plugins"), "application-x-addon-symbolic");
+            plugins_btn.clicked.connect (() => {
+                set_sidebar_active (plugins_btn);
+                current_nav = "plugins";
+                show_view ("plugins");
+                gtk_search_entry.text = "";
+                back_button.visible = false;
+            });
+            box.append (plugins_btn);
+            add_nav_action ("show-plugins", plugins_btn);
+
             add_nav_action ("show-collection", collection_btn);
             add_nav_action ("show-featured", featured_btn);
             add_nav_action ("show-popular", popular_btn);
@@ -555,6 +593,8 @@ namespace Singularity.Apps.Store {
                 refresh_updates_async ();
             } else if (view_id == "collection") {
                 load_collection.begin ();
+            } else if (view_id == "plugins") {
+                plugins_page.ensure_loaded ();
             }
         }
 
@@ -2125,6 +2165,13 @@ namespace Singularity.Apps.Store {
         // ============================================================
         // Flatpak operations
         // ============================================================
+
+        private PluginsPage plugins_page;
+
+        private void setup_plugins_view () {
+            plugins_page = new PluginsPage ();
+            main_stack.add_named (plugins_page, "plugins");
+        }
 
         private void setup_collection_view () {
             var outer = new Box (Orientation.VERTICAL, 0);

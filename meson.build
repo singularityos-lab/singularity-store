@@ -45,11 +45,15 @@ sources = files(
   'src/update_badge.vala',
   'src/search_provider.vala',
   'src/main.vala',
+  'src/plugins_page.vala',
+  'src/plugin_verify.c',
+  'src/plugin_verify.vapi',
 )
 
 executable('singularity-store',
   sources + [resources],
-  dependencies: [gtk_dep, gee_dep, soup_dep, json_dep, gio_unix_dep, math_dep, libsingularity_dep],
+  dependencies: [gtk_dep, gee_dep, soup_dep, json_dep, gio_unix_dep, math_dep, libsingularity_dep, meson.get_compiler('c').find_library('hogweed'), meson.get_compiler('vala').find_library('posix')],
+  include_directories: include_directories('src'),
   vala_args: ['--pkg=gio-unix-2.0'],
   install: true
 )
