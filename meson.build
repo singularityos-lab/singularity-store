@@ -43,6 +43,7 @@ sources = files(
   'src/window.vala',
   'src/app.vala',
   'src/update_badge.vala',
+  'src/package_tool.vala',
   'src/search_provider.vala',
   'src/main.vala',
   'src/plugins_page.vala',
@@ -59,8 +60,8 @@ executable('singularity-store',
 )
 
 executable('singularity-store-updates',
-  files('src/update_badge.vala', 'src/update_checker.vala'),
-  dependencies: [dependency('gio-2.0')],
+  files('src/update_badge.vala', 'src/package_tool.vala', 'src/update_checker.vala'),
+  dependencies: [dependency('gio-2.0'), json_dep],
   install: true
 )
 
