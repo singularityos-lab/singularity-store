@@ -145,24 +145,51 @@ namespace Singularity.Apps.Store {
             return ids;
         }
 
-        public static int progress_percent (string line, out string? error) {
+        public static int progress_percent (string line, out string? error, out string? status) {
             error = null;
+            status = null;
             if (!line.has_prefix ("{")) return -1;
             try {
                 var parser = new Json.Parser ();
                 parser.load_from_data (line);
                 var ev = parser.get_root ().get_object ();
-                if (ev.get_string_member_with_default ("phase", "") == "done") {
+                var phase = ev.get_string_member_with_default ("phase", "");
+                if (phase == "done") {
                     var msg = ev.get_string_member_with_default ("error", "");
                     if (msg != "") error = msg;
                     return 100;
                 }
                 var total = ev.get_int_member_with_default ("objects_total", 0);
-                if (total <= 0) return 0;
-                return (int) (ev.get_int_member_with_default ("objects_done", 0) * 100 / total).clamp (0, 100);
+                var done = ev.get_int_member_with_default ("objects_done", 0);
+                int percent = total <= 0 ? 0 : (int) (done * 100 / total).clamp (0, 100);
+                status = progress_status (phase, ev.get_string_member_with_default ("ref", ""), done, total, ev.get_int_member_with_default ("bytes_done", 0));
+                return percent;
             } catch (Error e) {
                 return -1;
             }
+        }
+
+        private static string progress_status (string phase, string @ref, int64 done, int64 total, int64 bytes) {
+            string what;
+            switch (phase) {
+            case "resolve":
+                what = _("Resolving");
+                break;
+            case "download":
+                what = _("Downloading");
+                break;
+            case "install":
+                what = _("Installing");
+                break;
+            default:
+                what = phase;
+                break;
+            }
+            var parts = new StringBuilder (what);
+            if (@ref != "") parts.append (" " + @ref);
+            if (total > 0) parts.append_printf (" %lld/%lld", done, total);
+            if (bytes > 0) parts.append (" " + GLib.format_size ((uint64) bytes));
+            return parts.str;
         }
     }
 }

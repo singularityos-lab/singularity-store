@@ -2393,6 +2393,8 @@ namespace Singularity.Apps.Store {
                 btn.sensitive = false;
             }
 
+            var stale = install_log_text.buffer.get_mark ("install-progress");
+            if (stale != null) install_log_text.buffer.delete_mark (stale);
             install_log_text.buffer.text = "Starting installation for %s...\n".printf(app_id);
             install_log_expander.visible = true;
             install_log_expander.expanded = true; // Auto-expand to show progress
@@ -2400,7 +2402,26 @@ namespace Singularity.Apps.Store {
             install_app_with_logs.begin (app_id, btn);
         }
 
+        private void show_install_progress (string status) {
+            var buffer = install_log_text.buffer;
+            TextIter end;
+            buffer.get_end_iter (out end);
+            var mark = buffer.get_mark ("install-progress");
+            if (mark != null) {
+                TextIter start;
+                buffer.get_iter_at_mark (out start, mark);
+                buffer.delete (ref start, ref end);
+            } else {
+                mark = buffer.create_mark ("install-progress", end, true);
+            }
+            buffer.get_end_iter (out end);
+            buffer.insert (ref end, status + "\n", -1);
+            install_log_text.scroll_to_mark (buffer.get_insert (), 0.0, true, 0.5, 1.0);
+        }
+
         private void append_install_log (string line) {
+            var progress = install_log_text.buffer.get_mark ("install-progress");
+            if (progress != null) install_log_text.buffer.delete_mark (progress);
             TextIter iter;
             install_log_text.buffer.get_end_iter (out iter);
             install_log_text.buffer.insert (ref iter, line + "\n", -1);
@@ -2443,7 +2464,9 @@ namespace Singularity.Apps.Store {
                         if (line == "" || line == last) continue;
                         last = line;
                         string? failure = null;
-                        int percent = PackageTool.cpak () ? PackageTool.progress_percent (line, out failure) : install_percent (line);
+                        string? status = null;
+                        int percent = PackageTool.cpak () ? PackageTool.progress_percent (line, out failure, out status) : install_percent (line);
+                        if (status != null) show_install_progress (status);
                         if (failure != null) append_install_log (failure);
                         else if (percent >= 0 && btn != null) btn.label = _("Installing… %d%%").printf (percent);
                         else if (percent < 0) append_install_log (line);
