@@ -32,6 +32,7 @@ namespace Singularity.Apps.Store {
             caps.foreach_element ((a, i, node) => have += node.get_string ());
             if (!("flatpak-install" in have && "flatpak-update" in have
                 && "list-json" in have && "update-check" in have && "json-progress" in have)) return false;
+            if (!has_flatpak ()) return true;
             var doctor = run_json ({ "cpak", "doctor", "--json" });
             return doctor != null && doctor.get_node_type () == Json.NodeType.OBJECT
                 && doctor.get_object ().get_boolean_member_with_default ("ready", false);
