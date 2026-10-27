@@ -21,6 +21,20 @@ namespace Singularity.Apps.Store {
         return Gdk.Texture.for_pixbuf (pixbuf);
     }
 
+    internal Gdk.Texture screenshot_texture_from_bytes (GLib.Bytes bytes) throws Error {
+        var packed = Singularity.Compute.shared ().call (9, Singularity.Compute.key ("store-screenshot", bytes.get_data ()), () => {
+            try {
+                var stream = new MemoryInputStream.from_bytes (bytes);
+                return Singularity.Compute.pack_pixbuf (new Gdk.Pixbuf.from_stream (stream, null));
+            } catch (Error e) {
+                return Singularity.Compute.pack_pixbuf (null);
+            }
+        });
+        var pixbuf = Singularity.Compute.unpack_pixbuf (packed);
+        if (pixbuf == null) throw new IOError.INVALID_DATA ("unreadable screenshot");
+        return Gdk.Texture.for_pixbuf (pixbuf);
+    }
+
     private bool is_svg (GLib.Bytes bytes) {
         unowned uint8[] data = bytes.get_data ();
         int n = int.min (data.length, 512);

@@ -1944,11 +1944,8 @@ namespace Singularity.Apps.Store {
                 http_session.send_and_read_async.begin (msg, GLib.Priority.LOW, null, (obj, res) => {
                     if (current_detail_app_id != app_id) return;
                     try {
-                        var bytes  = http_session.send_and_read_async.end (res);
-                        var stream = new GLib.MemoryInputStream.from_bytes (bytes);
-                        var pixbuf = new Gdk.Pixbuf.from_stream (stream, null);
-                        var texture = Gdk.Texture.for_pixbuf (pixbuf);
-                        carousel.set_image (idx, texture);
+                        var bytes = http_session.send_and_read_async.end (res);
+                        carousel.set_image (idx, screenshot_texture_from_bytes (bytes));
                     } catch (Error e) { /* keep spinner */ }
                 });
             }
