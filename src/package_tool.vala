@@ -3,6 +3,8 @@ namespace Singularity.Apps.Store {
     public class PackageTool : Object {
         private const string ORIGIN = "flatpak/flathub/";
         private static int probed = -1;
+        private static string[] capabilities = {};
+        private static HashTable<string, string>? requested = null;
 
         public static bool cpak () {
             if (probed < 0) probed = probe () ? 1 : 0;
@@ -30,6 +32,7 @@ namespace Singularity.Apps.Store {
             if (caps == null) return false;
             string[] have = {};
             caps.foreach_element ((a, i, node) => have += node.get_string ());
+            capabilities = have;
             if (!("flatpak-install" in have && "flatpak-update" in have
                 && "list-json" in have && "update-check" in have && "json-progress" in have)) return false;
             if (!has_flatpak ()) return true;
@@ -58,6 +61,21 @@ namespace Singularity.Apps.Store {
             return origin.has_prefix (ORIGIN) ? origin.substring (ORIGIN.length) : null;
         }
 
+        private static string? id_of (Json.Object app) {
+            var id = app_of (app.get_string_member_with_default ("origin", "").down ());
+            if (id == null) return null;
+            var name = app.get_string_member_with_default ("name", "");
+            return name.down () == id ? name : id;
+        }
+
+        public static string? requested_permissions (string app_id) {
+            return requested != null ? requested.lookup (app_id) : null;
+        }
+
+        private static bool can_approve () {
+            return "update-approve-permissions" in capabilities;
+        }
+
         public static void ensure_remote () {
             if (cpak ()) return;
             try {
@@ -79,11 +97,14 @@ namespace Singularity.Apps.Store {
         }
 
         public static string[] update_argv (string app_id) {
+            if (!legacy (app_id) && can_approve () && requested_permissions (app_id) != null)
+                return { "cpak", "update", origin (app_id), "--json-progress", "--approve-permissions" };
             if (!legacy (app_id)) return { "cpak", "update", origin (app_id), "--json-progress", "-n" };
             return { "flatpak", "--user", "update", "-y", app_id };
         }
 
-        public static string[] update_all_argv (bool use_cpak) {
+        public static string[] update_all_argv (bool use_cpak, bool approve) {
+            if (use_cpak && approve && can_approve ()) return { "cpak", "update", "--json-progress", "--approve-permissions" };
             if (use_cpak) return { "cpak", "update", "--json-progress", "-n" };
             return { "flatpak", "--user", "update", "-y" };
         }
@@ -125,7 +146,7 @@ namespace Singularity.Apps.Store {
                 var app = node.get_object ();
                 if (app == null || !app.has_member ("flatpak") || app.get_null_member ("flatpak")) return;
                 if (app.has_member ("pulled_in") && app.get_boolean_member ("pulled_in")) return;
-                var id = app_of (app.get_string_member_with_default ("origin", ""));
+                var id = id_of (app);
                 if (id != null && !(id in ids)) ids += id;
             });
             return ids;
@@ -134,13 +155,22 @@ namespace Singularity.Apps.Store {
         public static string[] update_ids () {
             if (!cpak ()) return lines_of ("flatpak --user remote-ls --updates --columns=application");
             string[] ids = has_flatpak () ? lines_of ("flatpak --user remote-ls --updates --columns=application") : new string[0];
+            requested = new HashTable<string, string> (str_hash, str_equal);
             var root = run_json ({ "cpak", "update", "--check", "--json" });
             if (root == null || root.get_node_type () != Json.NodeType.ARRAY) return ids;
             root.get_array ().foreach_element ((a, i, node) => {
                 var r = node.get_object ();
                 if (r == null || r.get_string_member_with_default ("status", "") != "available") return;
-                var id = app_of (r.get_string_member_with_default ("origin", ""));
-                if (id != null && !(id in ids)) ids += id;
+                var id = id_of (r);
+                if (id == null || id in ids) return;
+                ids += id;
+                var member = r.get_member ("permission_additions");
+                if (member == null || member.get_node_type () != Json.NodeType.ARRAY) return;
+                var additions = member.get_array ();
+                if (additions.get_length () == 0) return;
+                string[] names = {};
+                additions.foreach_element ((b, j, item) => names += item.get_string ());
+                requested.insert (id, string.joinv (", ", names));
             });
             return ids;
         }

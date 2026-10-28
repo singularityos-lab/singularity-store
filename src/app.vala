@@ -1380,7 +1380,28 @@ namespace Singularity.Apps.Store {
         }
 
         private void on_update_all_clicked () {
-            foreach (var use_cpak in PackageTool.update_all_tools ()) run_update (PackageTool.update_all_argv (use_cpak));
+            string[] asking = {};
+            foreach (var app_id in pending_update_ids) {
+                var permissions = PackageTool.requested_permissions (app_id);
+                if (permissions != null) asking += "%s: %s".printf (app_id, permissions);
+            }
+            if (asking.length == 0) {
+                update_all (false);
+                return;
+            }
+            var dialog = new ConfirmDialog (this, _("Allow New Permissions?"), null,
+                _("These updates ask for permissions the apps did not have before:") + "\n\n" + string.joinv ("\n", asking),
+                _("Allow and Update"), ConfirmDialog.ActionStyle.SUGGESTED);
+            dialog.set_secondary (_("Update the Others"), ConfirmDialog.ActionStyle.DEFAULT);
+            dialog.response.connect ((r) => {
+                if (r == ConfirmDialog.Response.PRIMARY) update_all (true);
+                else if (r == ConfirmDialog.Response.SECONDARY) update_all (false);
+            });
+            dialog.present ();
+        }
+
+        private void update_all (bool approve) {
+            foreach (var use_cpak in PackageTool.update_all_tools ()) run_update (PackageTool.update_all_argv (use_cpak, approve));
             foreach (var app_id in sxi_update_ids ()) update_sxi (app_id, null);
         }
 
@@ -1418,6 +1439,21 @@ namespace Singularity.Apps.Store {
         private void on_update_single_clicked (Button btn) {
             var app_id = btn.get_data<string> ("app-id");
             if (app_id == null) return;
+            var permissions = PackageTool.requested_permissions (app_id);
+            if (permissions == null) {
+                update_single (app_id, btn);
+                return;
+            }
+            var dialog = new ConfirmDialog (this, _("Allow New Permissions?"), null,
+                _("This update of %s asks for permissions the app did not have before: %s").printf (app_id, permissions),
+                _("Allow and Update"), ConfirmDialog.ActionStyle.SUGGESTED);
+            dialog.response.connect ((r) => {
+                if (r == ConfirmDialog.Response.PRIMARY) update_single (app_id, btn);
+            });
+            dialog.present ();
+        }
+
+        private void update_single (string app_id, Button btn) {
             run_update (PackageTool.update_argv (app_id));
             btn.label     = _("Updating…");
             btn.sensitive = false;
