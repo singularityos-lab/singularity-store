@@ -60,7 +60,7 @@ executable('singularity-store',
 )
 
 executable('singularity-store-updates',
-  files('src/update_badge.vala', 'src/package_tool.vala', 'src/update_checker.vala'),
+  files('src/update_badge.vala', 'src/package_tool.vala', 'src/sxi_client.vala', 'src/update_checker.vala'),
   dependencies: [dependency('gio-2.0'), json_dep],
   install: true
 )

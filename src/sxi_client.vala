@@ -83,5 +83,37 @@ namespace Singularity.Apps.Store {
         public async void remove (string app_id) throws Error {
             yield proxy.call ("Remove", new Variant ("(s)", app_id), DBusCallFlags.NONE, -1, null);
         }
+
+        public static bool has_update (Json.Object app) {
+            if (!app.has_member ("installed") || !app.has_member ("releases")) return false;
+            var installed = app.get_object_member ("installed");
+            if (installed == null) return false;
+            int64 current = installed.get_int_member_with_default ("sequence", 0);
+            string slot = installed.get_string_member_with_default ("slot", "");
+            var releases = app.get_array_member ("releases");
+            string arch = "";
+            for (uint i = 0; i < releases.get_length (); i++) {
+                var r = releases.get_object_element (i);
+                if (r.get_string_member_with_default ("slot", "") == slot) arch = r.get_string_member_with_default ("arch", "");
+            }
+            for (uint i = 0; i < releases.get_length (); i++) {
+                var r = releases.get_object_element (i);
+                if (arch != "" && r.get_string_member_with_default ("arch", "") != arch) continue;
+                if (r.get_int_member_with_default ("sequence", 0) > current) return true;
+            }
+            return false;
+        }
+
+        public static string[] update_ids (Json.Array? available) {
+            string[] ids = {};
+            if (available == null) return ids;
+            for (uint i = 0; i < available.get_length (); i++) {
+                var node = available.get_element (i);
+                if (node.get_node_type () != Json.NodeType.OBJECT) continue;
+                var app = node.get_object ();
+                if (has_update (app)) ids += app.get_string_member_with_default ("id", "");
+            }
+            return ids;
+        }
     }
 }

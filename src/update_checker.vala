@@ -7,6 +7,7 @@ namespace Singularity.Apps.Store {
 
         private int last_count = 0;
         private bool checking = false;
+        private SxiClient sxi = new SxiClient ();
 
         public UpdateChecker () {
             Object (application_id: "dev.sinty.store.Updates", flags: ApplicationFlags.IS_SERVICE);
@@ -42,13 +43,21 @@ namespace Singularity.Apps.Store {
             new Thread<bool> ("store-update-check", () => {
                 int count = UpdateBadge.list_update_ids ().length;
                 Idle.add (() => {
-                    checking = false;
-                    last_count = count;
-                    UpdateBadge.publish (get_dbus_connection (), count);
+                    count_sxi.begin ((obj, res) => {
+                        count += count_sxi.end (res);
+                        checking = false;
+                        last_count = count;
+                        UpdateBadge.publish (get_dbus_connection (), count);
+                    });
                     return Source.REMOVE;
                 });
                 return true;
             });
+        }
+
+        private async int count_sxi () {
+            if (!sxi.available) yield sxi.open ();
+            return SxiClient.update_ids (yield sxi.list_available ()).length;
         }
     }
 

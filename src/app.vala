@@ -1269,14 +1269,24 @@ namespace Singularity.Apps.Store {
             return true;
         }
 
+        private string[] sxi_update_ids () {
+            string[] ids = {};
+            foreach (var entry in sxi_apps.entries) {
+                if (SxiClient.has_update (entry.value)) ids += entry.key;
+            }
+            return ids;
+        }
+
         private bool on_updates_checked () {
-            UpdateBadge.publish (get_dbus_connection (), pending_update_ids.length);
+            var sxi_updates = sxi_update_ids ();
+            int total = pending_update_ids.length + sxi_updates.length;
+            UpdateBadge.publish (get_dbus_connection (), total);
             if (update_checker_autostart ().query_exists ()) wake_update_checker ();
             updates_status.visible = false;
             clear_box (updates_box);
-            update_all_action.set_enabled (pending_update_ids.length > 0);
+            update_all_action.set_enabled (total > 0);
 
-            if (pending_update_ids.length == 0) {
+            if (total == 0) {
                 updates_scroll.visible = false;
                 updates_done.visible = true;
                 return false;
@@ -1331,6 +1341,39 @@ namespace Singularity.Apps.Store {
                 list.append (row);
             }
 
+            foreach (var app_id in sxi_updates) {
+                var info = sxi_info (sxi_apps[app_id]);
+                var row  = new ListBoxRow ();
+                var hbox = new Box (Orientation.HORIZONTAL, 12);
+                hbox.margin_start  = 12;
+                hbox.margin_end    = 12;
+                hbox.margin_top    = 8;
+                hbox.margin_bottom = 8;
+
+                var icon = new Image.from_icon_name ("application-x-executable");
+                icon.pixel_size = 48;
+                icon.add_css_class ("store-app-icon");
+                if (info.icon_url != null) load_icon_async (icon, info.icon_url);
+                hbox.append (icon);
+
+                var name_lbl = new Label (info.name);
+                name_lbl.xalign    = 0;
+                name_lbl.add_css_class ("store-app-name");
+                name_lbl.hexpand   = true;
+                name_lbl.valign    = Align.CENTER;
+                name_lbl.ellipsize = EllipsizeMode.END;
+                hbox.append (name_lbl);
+
+                var update_btn = new Button.with_label (_("Update"));
+                update_btn.add_css_class ("suggested-action");
+                update_btn.add_css_class ("flat");
+                update_btn.clicked.connect (() => update_sxi (app_id, update_btn));
+                hbox.append (update_btn);
+
+                row.set_child (hbox);
+                list.append (row);
+            }
+
             updates_box.append (list);
             updates_scroll.visible = true;
             return false;
@@ -1338,6 +1381,22 @@ namespace Singularity.Apps.Store {
 
         private void on_update_all_clicked () {
             foreach (var use_cpak in PackageTool.update_all_tools ()) run_update (PackageTool.update_all_argv (use_cpak));
+            foreach (var app_id in sxi_update_ids ()) update_sxi (app_id, null);
+        }
+
+        private void update_sxi (string app_id, Button? btn) {
+            if (btn != null) {
+                btn.label     = _("Updating…");
+                btn.sensitive = false;
+                sxi_buttons[app_id] = btn;
+            }
+            sxi.install.begin (app_id, (obj, res) => {
+                try {
+                    sxi.install.end (res);
+                } catch (Error e) {
+                    on_sxi_finished (app_id, e.message);
+                }
+            });
         }
 
         private void run_update (string[] argv) {
@@ -1534,6 +1593,13 @@ namespace Singularity.Apps.Store {
             action_box.margin_top = 8;
 
             if (info.is_installed) {
+                if (info.source == "sxi" && sxi_apps.has_key (info.app_id) && SxiClient.has_update (sxi_apps[info.app_id])) {
+                    var sxi_update_btn = new Button.with_label (_("Update"));
+                    sxi_update_btn.add_css_class ("suggested-action");
+                    string sxi_id = info.app_id;
+                    sxi_update_btn.clicked.connect (() => update_sxi (sxi_id, sxi_update_btn));
+                    action_box.append (sxi_update_btn);
+                }
                 var open_btn = new Button.with_label (_("Open"));
                 open_btn.add_css_class ("suggested-action");
                 open_btn.set_data<string> ("app-id", info.app_id);
@@ -2220,6 +2286,8 @@ namespace Singularity.Apps.Store {
             }
             populate_collection ();
             if (main_stack.visible_child_name == "installed") populate_installed_view ();
+            if (current_nav == "updates") refresh_updates_async ();
+            else if (update_checker_autostart ().query_exists ()) wake_update_checker ();
             if (sxi_apps.size == 0 && !collection_refreshed) {
                 collection_refreshed = true;
                 try {
