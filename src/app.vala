@@ -1269,6 +1269,28 @@ namespace Singularity.Apps.Store {
             return true;
         }
 
+        private void load_update_identity (string app_id, Label name_lbl, Image icon) {
+            var url = "https://flathub.org/api/v2/appstream/" +
+                      GLib.Uri.escape_string (app_id, null, true);
+            http_session.send_and_read_async.begin (new Soup.Message ("GET", url),
+                GLib.Priority.DEFAULT, null, (obj, res) => {
+                try {
+                    var bytes = http_session.send_and_read_async.end (res);
+                    var parser = new Json.Parser ();
+                    parser.load_from_data ((string) bytes.get_data ());
+                    var root = parser.get_root ();
+                    if (root == null || root.get_node_type () != Json.NodeType.OBJECT) return;
+                    var app_obj = root.get_object ();
+                    var name = obj_str (app_obj, "name");
+                    if (name != "") name_lbl.label = name;
+                    var icon_url = obj_str (app_obj, "icon");
+                    if (icon_url != "") load_icon_async (icon, icon_url);
+                } catch (Error e) {
+                    debug ("Update details for %s: %s", app_id, e.message);
+                }
+            });
+        }
+
         private string[] sxi_update_ids () {
             string[] ids = {};
             foreach (var entry in sxi_apps.entries) {
@@ -1322,7 +1344,8 @@ namespace Singularity.Apps.Store {
                 icon.add_css_class ("store-app-icon");
                 hbox.append (icon);
 
-                var name_lbl = new Label (app_id);
+                var name_lbl = new Label (update_info != null ? update_info.get_name () : app_id);
+                if (update_info == null) load_update_identity (app_id, name_lbl, icon);
                 name_lbl.xalign    = 0;
                 name_lbl.add_css_class ("store-app-name");
                 name_lbl.hexpand   = true;
