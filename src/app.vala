@@ -89,7 +89,8 @@ namespace Singularity.Apps.Store {
         private Spinner collection_spinner;
         private ScrolledWindow collection_scroll;
         private Box collection_box;
-        private bool collection_refreshed = false;
+        private bool collection_refreshing = false;
+        private int64 collection_refreshed_at = 0;
 
         // ============================================================
         // Lifecycle
@@ -586,6 +587,7 @@ namespace Singularity.Apps.Store {
                 refresh_installed_async ();
             } else if (view_id == "updates") {
                 refresh_updates_async ();
+                refresh_collection.begin ();
             } else if (view_id == "collection") {
                 load_collection.begin ();
             } else if (view_id == "plugins") {
@@ -2347,14 +2349,21 @@ namespace Singularity.Apps.Store {
             if (main_stack.visible_child_name == "installed") populate_installed_view ();
             if (current_nav == "updates") refresh_updates_async ();
             else if (update_checker_autostart ().query_exists ()) wake_update_checker ();
-            if (sxi_apps.size == 0 && !collection_refreshed) {
-                collection_refreshed = true;
-                try {
-                    yield sxi.refresh ();
-                } catch (Error e) {
-                    warning ("Collection refresh: %s", e.message);
-                }
+            refresh_collection.begin ();
+        }
+
+        private async void refresh_collection () {
+            int64 now = get_monotonic_time ();
+            if (!sxi.available || collection_refreshing) return;
+            if (collection_refreshed_at != 0 && now - collection_refreshed_at < 5 * TimeSpan.MINUTE) return;
+            collection_refreshing = true;
+            collection_refreshed_at = now;
+            try {
+                yield sxi.refresh ();
+            } catch (Error e) {
+                warning ("Collection refresh: %s", e.message);
             }
+            collection_refreshing = false;
         }
 
         private bool in_collection (Json.Object app, string name) {
