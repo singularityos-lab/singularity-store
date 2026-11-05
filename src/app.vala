@@ -1129,18 +1129,17 @@ namespace Singularity.Apps.Store {
 
             // Try to resolve real name/icon from .desktop file
             string display_name = app_id;
-            string? icon_name_resolved = null;
-            var desktop_info = new GLib.DesktopAppInfo (app_id + ".desktop");
+            GLib.Icon? gicon = null;
+            var desktop_info = installed_info (app_id);
             if (desktop_info != null) {
                 display_name = desktop_info.get_display_name () ?? app_id;
-                var gicon = desktop_info.get_icon ();
-                if (gicon != null) icon_name_resolved = gicon.to_string ();
+                gicon = desktop_info.get_icon ();
             } else if (sxi_installed.has_key (app_id)) {
                 display_name = obj_str (sxi_installed[app_id], "name");
             }
 
-            var icon = icon_name_resolved != null
-                ? new Image.from_icon_name (icon_name_resolved)
+            var icon = gicon != null
+                ? new Image.from_gicon (gicon)
                 : new Image.from_icon_name ("application-x-executable");
             icon.pixel_size = 48;
             icon.add_css_class ("store-app-icon");
@@ -1271,6 +1270,17 @@ namespace Singularity.Apps.Store {
             return true;
         }
 
+        private static GLib.DesktopAppInfo? installed_info (string app_id) {
+            var direct = new GLib.DesktopAppInfo (app_id + ".desktop");
+            if (direct != null) return direct;
+            string suffix = "-" + app_id + ".desktop";
+            foreach (var info in GLib.AppInfo.get_all ()) {
+                string? id = info.get_id ();
+                if (id != null && id.has_prefix ("cpak-") && id.has_suffix (suffix)) return info as GLib.DesktopAppInfo;
+            }
+            return null;
+        }
+
         private void load_update_identity (string app_id, Label name_lbl, Image icon) {
             var url = "https://flathub.org/api/v2/appstream/" +
                       GLib.Uri.escape_string (app_id, null, true);
@@ -1338,10 +1348,10 @@ namespace Singularity.Apps.Store {
                 hbox.margin_top    = 8;
                 hbox.margin_bottom = 8;
 
-                string? update_icon_name = null;
-                var update_info = new GLib.DesktopAppInfo (app_id + ".desktop");
-                if (update_info != null && update_info.get_icon () != null) update_icon_name = update_info.get_icon ().to_string ();
-                var icon = new Image.from_icon_name (update_icon_name ?? "application-x-executable");
+                var update_info = installed_info (app_id);
+                var icon = update_info != null && update_info.get_icon () != null
+                    ? new Image.from_gicon (update_info.get_icon ())
+                    : new Image.from_icon_name ("application-x-executable");
                 icon.pixel_size = 48;
                 icon.add_css_class ("store-app-icon");
                 hbox.append (icon);
