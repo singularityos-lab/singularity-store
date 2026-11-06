@@ -6,8 +6,13 @@ namespace Singularity.Apps.Store {
         private static string[] capabilities = {};
         private static HashTable<string, string>? requested = null;
 
+        private static Mutex probe_lock;
+
         public static bool cpak () {
-            if (probed < 0) probed = probe () ? 1 : 0;
+            if (AtomicInt.get (ref probed) >= 0) return AtomicInt.get (ref probed) == 1;
+            probe_lock.lock ();
+            if (probed < 0) AtomicInt.set (ref probed, probe () ? 1 : 0);
+            probe_lock.unlock ();
             return probed == 1;
         }
 

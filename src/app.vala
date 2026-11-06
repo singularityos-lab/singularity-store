@@ -211,6 +211,14 @@ namespace Singularity.Apps.Store {
         // Flathub is a per-user remote by default; add it once so installs work on a
         // fresh account without root. Idempotent (--if-not-exists), non-blocking.
         private void ensure_flathub_remote () {
+            ensure_flathub_remote_async.begin ();
+        }
+
+        private async void ensure_flathub_remote_async () {
+            try {
+                yield Singularity.Async.run<bool> ((c) => PackageTool.cpak (), Singularity.Async.Qos.UTILITY);
+            } catch (Error e) {
+            }
             PackageTool.ensure_remote ();
         }
 
