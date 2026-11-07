@@ -1465,7 +1465,9 @@ namespace Singularity.Apps.Store {
 
         private void run_update (string[] argv) {
             try {
-                var proc = new Subprocess.newv (argv, SubprocessFlags.NONE);
+                var launcher = new SubprocessLauncher (SubprocessFlags.NONE);
+                launcher.set_child_setup (store_lower_priority);
+                var proc = launcher.spawnv (argv);
                 proc.wait_async.begin (null, (obj, res) => {
                     try {
                         proc.wait_async.end (res);
