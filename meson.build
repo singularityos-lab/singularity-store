@@ -49,8 +49,6 @@ sources = files(
   'src/plugins_page.vala',
   'src/plugin_verify.c',
   'src/plugin_verify.vapi',
-  'src/background_priority.c',
-  'src/background_priority.vapi',
 )
 
 executable('singularity-store',
@@ -62,9 +60,9 @@ executable('singularity-store',
 )
 
 executable('singularity-store-updates',
-  files('src/update_badge.vala', 'src/package_tool.vala', 'src/sxi_client.vala', 'src/update_checker.vala', 'src/background_priority.c', 'src/background_priority.vapi'),
+  files('src/update_badge.vala', 'src/package_tool.vala', 'src/sxi_client.vala', 'src/update_checker.vala'),
   include_directories: include_directories('src'),
-  dependencies: [dependency('gio-2.0'), json_dep],
+  dependencies: [dependency('gio-2.0'), json_dep, libsingularity_dep],
   install: true
 )
 

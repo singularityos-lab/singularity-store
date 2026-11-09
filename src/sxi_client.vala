@@ -5,6 +5,7 @@ namespace Singularity.Apps.Store {
         private const string OBJECT_PATH = "/dev/sinty/SXI1";
 
         private DBusProxy? proxy = null;
+        private HashTable<string, Singularity.BackgroundWork> followed = new HashTable<string, Singularity.BackgroundWork> (str_hash, str_equal);
 
         public signal void changed ();
         public signal void progress (string app_id, string stage, int64 done, int64 total);
@@ -41,6 +42,7 @@ namespace Singularity.Apps.Store {
                 case "Finished":
                     string id, error;
                     parameters.get ("(ss)", out id, out error);
+                    unfollow (id);
                     finished (id, error);
                     break;
             }
@@ -74,6 +76,24 @@ namespace Singularity.Apps.Store {
         public async void refresh () throws Error {
             if (!available) return;
             yield proxy.call ("Refresh", null, DBusCallFlags.NONE, 180000, null);
+        }
+
+        public void follow (string app_id, Gtk.Widget bar) {
+            unfollow (app_id);
+            var work = Singularity.BackgroundWork.observe ();
+            followed[app_id] = work;
+            work.notify["foreground"].connect (() => {
+                if (proxy == null) return;
+                proxy.call.begin ("Follow", new Variant ("(sb)", app_id, work.foreground), DBusCallFlags.NONE, -1, null);
+            });
+            work.follow (bar);
+        }
+
+        private void unfollow (string app_id) {
+            var work = followed[app_id];
+            if (work == null) return;
+            followed.remove (app_id);
+            work.finish ();
         }
 
         public async void install (string app_id) throws Error {

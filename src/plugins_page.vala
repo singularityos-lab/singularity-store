@@ -118,7 +118,9 @@ namespace Singularity.Apps.Store {
             DirUtils.create_with_parents (tmp, 0755);
             string archive = Path.build_filename (tmp, "bundle.tar.gz");
             FileUtils.set_data (archive, bytes.get_data ());
-            var proc = new Subprocess.newv ({ "tar", "-xzf", archive, "-C", tmp, "--no-same-owner", "--no-same-permissions" }, SubprocessFlags.NONE);
+            var launcher = new SubprocessLauncher (SubprocessFlags.NONE);
+            launcher.set_child_setup (Singularity.BackgroundWork.lower);
+            var proc = launcher.spawnv ({ "tar", "-xzf", archive, "-C", tmp, "--no-same-owner", "--no-same-permissions" });
             yield proc.wait_async (null);
             FileUtils.unlink (archive);
             if (!proc.get_successful ()) throw new IOError.FAILED (_("Could not unpack the plugin"));

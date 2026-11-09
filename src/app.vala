@@ -1215,7 +1215,7 @@ namespace Singularity.Apps.Store {
                 return;
             }
             try {
-                Process.spawn_async (null, PackageTool.remove_argv (app_id), null, SpawnFlags.SEARCH_PATH, null, null);
+                Process.spawn_async (null, PackageTool.remove_argv (app_id), null, SpawnFlags.SEARCH_PATH, Singularity.BackgroundWork.lower, null);
                 if (row != null) row.visible = false;
             } catch (Error e) {
                 warning ("Remove error: %s", e.message);
@@ -1453,6 +1453,7 @@ namespace Singularity.Apps.Store {
                 btn.label     = _("Updating…");
                 btn.sensitive = false;
                 sxi_buttons[app_id] = btn;
+                sxi.follow (app_id, btn);
             }
             sxi.install.begin (app_id, (obj, res) => {
                 try {
@@ -1466,7 +1467,7 @@ namespace Singularity.Apps.Store {
         private void run_update (string[] argv) {
             try {
                 var launcher = new SubprocessLauncher (SubprocessFlags.NONE);
-                launcher.set_child_setup (store_lower_priority);
+                launcher.set_child_setup (Singularity.BackgroundWork.lower);
                 var proc = launcher.spawnv (argv);
                 proc.wait_async.begin (null, (obj, res) => {
                     try {
@@ -2043,6 +2044,7 @@ namespace Singularity.Apps.Store {
         private async void remove_app (string app_id, Button btn) {
             if (sxi_installed.has_key (app_id)) {
                 try {
+                    sxi.follow (app_id, btn);
                     yield sxi.remove (app_id);
                     btn.label = _("Removed");
                 } catch (Error e) {
@@ -2053,9 +2055,13 @@ namespace Singularity.Apps.Store {
                 return;
             }
             try {
-                var proc = new Subprocess.newv (PackageTool.remove_argv (app_id),
-                    SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE);
+                var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE);
+                launcher.set_child_setup (Singularity.BackgroundWork.lower);
+                var proc = launcher.spawnv (PackageTool.remove_argv (app_id));
+                var work = Singularity.BackgroundWork.for_process (int.parse (proc.get_identifier ()));
+                work.follow (btn);
                 yield proc.wait_async ();
+                work.finish ();
                 if (proc.get_successful ()) {
                     btn.label = _("Removed");
                 } else {
@@ -2485,6 +2491,7 @@ namespace Singularity.Apps.Store {
                 btn.label     = _("Installing…");
                 btn.sensitive = false;
                 sxi_buttons[app_id] = btn;
+                sxi.follow (app_id, btn);
             }
             sxi.install.begin (app_id, (obj, res) => {
                 try {
@@ -2594,7 +2601,10 @@ namespace Singularity.Apps.Store {
         private async void install_app_with_logs (string app_id, Button? btn) {
             try {
                 var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_MERGE);
+                launcher.set_child_setup (Singularity.BackgroundWork.lower);
                 var proc = launcher.spawnv (PackageTool.install_argv (app_id));
+                var work = Singularity.BackgroundWork.for_process (int.parse (proc.get_identifier ()));
+                if (btn != null) work.follow (btn);
 
                 var stream = proc.get_stdout_pipe ();
                 var pending = new StringBuilder ();
@@ -2628,6 +2638,7 @@ namespace Singularity.Apps.Store {
                 if (pending.len > 0) append_install_log (pending.str.strip ());
 
                 yield proc.wait_async ();
+                work.finish ();
                 if (!proc.get_successful ()) {
                     append_install_log (_("The installation did not complete."));
                     if (btn != null) {

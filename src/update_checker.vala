@@ -62,7 +62,7 @@ namespace Singularity.Apps.Store {
     }
 
     public static int main (string[] args) {
-        store_lower_priority ();
+        Singularity.BackgroundWork.lower ();
         return new UpdateChecker ().run (args);
     }
 }
