@@ -1080,14 +1080,13 @@ namespace Singularity.Apps.Store {
             installed_status.visible = true;
             installed_scroll.visible = false;
             installed_empty.visible = false;
-            new Thread<bool> ("installed-apps", do_load_installed);
-        }
-
-        private bool do_load_installed () {
-            installed_app_ids = PackageTool.installed_ids ();
-
-            Idle.add (on_installed_loaded);
-            return true;
+            Singularity.Async.dispatch (this, Singularity.Async.Qos.USER, (c) => {
+                string[] ids = PackageTool.installed_ids ();
+                return () => {
+                    installed_app_ids = ids;
+                    on_installed_loaded ();
+                };
+            });
         }
 
         private bool on_installed_loaded () {
@@ -1268,14 +1267,13 @@ namespace Singularity.Apps.Store {
             updates_status.visible = true;
             updates_scroll.visible = false;
             updates_done.visible = false;
-            new Thread<bool> ("check-updates", do_check_updates);
-        }
-
-        private bool do_check_updates () {
-            pending_update_ids = UpdateBadge.list_update_ids ();
-
-            Idle.add (on_updates_checked);
-            return true;
+            Singularity.Async.dispatch (this, Singularity.Async.Qos.UTILITY, (c) => {
+                var ids = UpdateBadge.list_update_ids ();
+                return () => {
+                    pending_update_ids = ids;
+                    on_updates_checked ();
+                };
+            });
         }
 
         private static GLib.DesktopAppInfo? installed_info (string app_id) {
@@ -2073,7 +2071,7 @@ namespace Singularity.Apps.Store {
                 btn.label = _("Remove");
                 btn.sensitive = true;
             }
-            do_load_installed ();
+            refresh_installed_async ();
         }
 
         private void on_detail_install_clicked (Button btn) {
@@ -2662,7 +2660,7 @@ namespace Singularity.Apps.Store {
                 });
 
                 // Refresh installed apps list
-                do_load_installed ();
+                refresh_installed_async ();
 
             } catch (Error e) {
                 warning ("Install error: %s", e.message);
