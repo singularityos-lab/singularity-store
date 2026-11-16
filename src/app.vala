@@ -10,6 +10,9 @@ namespace Singularity.Apps.Store {
 
         // Window
         private StoreWindow main_window;
+        private WebCatalog web_catalog;
+        private Box web_box;
+        private Json.Array? discover_hits = null;
         private Stack main_stack;
         private Gtk.Revealer? sidebar_revealer = null;
         private Gtk.Button? sidebar_active_btn = null;
@@ -317,6 +320,7 @@ namespace Singularity.Apps.Store {
 
             main_window = new StoreWindow (this);
             main_stack = main_window.main_stack;
+            web_catalog = new WebCatalog ();
 
             setup_toolbar ();
             setup_sidebar ();
@@ -337,6 +341,11 @@ namespace Singularity.Apps.Store {
             setup_detail_view ();
             setup_collection_view ();
             setup_plugins_view ();
+            setup_web_view ();
+
+            web_catalog.changed.connect (on_web_changed);
+            web_catalog.refresh.begin (http_session);
+            main_window.form_factor_changed.connect (() => on_web_changed ());
 
             main_window.set_content (main_stack);
             main_window.present ();
@@ -478,6 +487,17 @@ namespace Singularity.Apps.Store {
             });
             box.append(recent_btn);
 
+            var web_btn = make_sidebar_button (_("Web"), "web-browser-symbolic");
+            web_btn.clicked.connect (() => {
+                set_sidebar_active (web_btn);
+                current_nav = "web";
+                show_view ("web");
+                gtk_search_entry.text = "";
+                back_button.visible = false;
+            });
+            box.append (web_btn);
+            add_nav_action ("show-web", web_btn);
+
             box.append(new Separator (Orientation.HORIZONTAL));
 
             // ── Categories ───────────────────────────────────────────
@@ -600,6 +620,8 @@ namespace Singularity.Apps.Store {
                 load_collection.begin ();
             } else if (view_id == "plugins") {
                 plugins_page.ensure_loaded ();
+            } else if (view_id == "web") {
+                populate_web ();
             }
         }
 
@@ -674,6 +696,10 @@ namespace Singularity.Apps.Store {
             if (hits.get_length () == 0) {
                 show_discover_error (); return;
             }
+            discover_hits = hits;
+
+            var kind = main_window.form_factor;
+            if (kind == Singularity.FormFactorKind.TV) append_web_highlights (discover_box, _("For Your TV"), kind);
 
             // Featured hero section - horizontal scroll of banner cards
             discover_box.append (make_section_label ("Editor's Picks"));
@@ -691,6 +717,8 @@ namespace Singularity.Apps.Store {
             }
             hero_scroll.set_child (hero_box);
             discover_box.append (hero_scroll);
+
+            if (kind != Singularity.FormFactorKind.TV) append_web_highlights (discover_box, _("Web Apps"), kind);
 
             // New & Noteworthy - vertical list
             var new_lbl = make_section_label ("New & Noteworthy");
@@ -2291,6 +2319,186 @@ namespace Singularity.Apps.Store {
         // ============================================================
         // Flatpak operations
         // ============================================================
+
+        private void setup_web_view () {
+            web_box = new Box (Orientation.VERTICAL, 0);
+            web_box.margin_start  = 12;
+            web_box.margin_end    = 12;
+            web_box.margin_top    = 8;
+            web_box.margin_bottom = 24;
+            var scroll = new ScrolledWindow ();
+            scroll.hscrollbar_policy = PolicyType.NEVER;
+            scroll.vexpand = true;
+            scroll.set_child (web_box);
+            main_stack.add_named (scroll, "web");
+        }
+
+        private void on_web_changed () {
+            if (main_stack.visible_child_name == "web") populate_web ();
+            if (discover_hits != null) populate_discover (discover_hits);
+        }
+
+        private void populate_web () {
+            clear_box (web_box);
+            var kind = main_window.form_factor;
+            var here = new GenericArray<WebEntry> ();
+            var rest = new GenericArray<WebEntry> ();
+            foreach (var entry in web_catalog.ranked (kind)) {
+                if (entry.supports (kind)) here.add (entry);
+                else rest.add (entry);
+            }
+            string title = kind == Singularity.FormFactorKind.TV ? _("For Your TV")
+                : kind == Singularity.FormFactorKind.PHONE ? _("For Your Phone")
+                : kind == Singularity.FormFactorKind.TABLET ? _("For Your Tablet")
+                : _("For Your Computer");
+            if (here.length > 0) {
+                web_box.append (make_section_label (title));
+                foreach (var entry in here) web_box.append (make_web_card (entry));
+            }
+            if (rest.length > 0) {
+                var more = make_section_label (_("More Web Apps"));
+                more.margin_top = 20;
+                web_box.append (more);
+                foreach (var entry in rest) web_box.append (make_web_card (entry));
+            }
+        }
+
+        private void append_web_highlights (Box target, string title, Singularity.FormFactorKind kind) {
+            var picks = web_catalog.highlights (kind);
+            if (picks.length == 0) return;
+            var lbl = make_section_label (title);
+            lbl.margin_top = target.get_first_child () != null ? 20 : 0;
+            target.append (lbl);
+            var scroll = new ScrolledWindow ();
+            scroll.vscrollbar_policy = PolicyType.NEVER;
+            scroll.hscrollbar_policy = PolicyType.AUTOMATIC;
+            var row = new Box (Orientation.HORIZONTAL, 12);
+            row.margin_bottom = 8;
+            foreach (var entry in picks) row.append (make_web_hero (entry));
+            scroll.set_child (row);
+            target.append (scroll);
+        }
+
+        private Widget make_web_hero (WebEntry entry) {
+            var card = new Button ();
+            card.add_css_class ("store-hero-card");
+            card.add_css_class ("flat");
+            card.halign = Align.START;
+            card.width_request = 180;
+            var vb = new Box (Orientation.VERTICAL, 8);
+            vb.margin_start  = 4;
+            vb.margin_end    = 4;
+            vb.margin_top    = 4;
+            vb.margin_bottom = 4;
+            var icon = new Image.from_icon_name ("web-browser");
+            icon.pixel_size = 72;
+            icon.add_css_class ("store-app-icon");
+            icon.halign = Align.CENTER;
+            vb.append (icon);
+            var name_lbl = new Label (entry.name);
+            name_lbl.add_css_class ("store-app-name");
+            name_lbl.halign = Align.CENTER;
+            name_lbl.ellipsize = EllipsizeMode.END;
+            name_lbl.margin_top = 8;
+            vb.append (name_lbl);
+            var sub = new Label (entry.installed ? _("Installed") : _("Web app"));
+            sub.add_css_class ("store-app-summary");
+            sub.halign = Align.CENTER;
+            vb.append (sub);
+            card.set_child (vb);
+            card.clicked.connect (() => {
+                if (entry.installed) {
+                    web_catalog.open (entry);
+                    return;
+                }
+                sub.label = _("Installing…");
+                string? error;
+                web_catalog.install (entry, () => {
+                    sub.label = entry.installed ? _("Installed") : _("Web app");
+                    return false;
+                }, out error);
+                if (error != null) {
+                    sub.label = _("Web app");
+                    main_window.add_toast (new Toast (error));
+                }
+            });
+            if (entry.icon != "") load_icon_async (icon, entry.icon);
+            return card;
+        }
+
+        private Widget make_web_card (WebEntry entry) {
+            var card = new Box (Orientation.HORIZONTAL, 12);
+            card.add_css_class ("store-app-card");
+            card.hexpand = true;
+            var icon = new Image.from_icon_name ("web-browser");
+            icon.pixel_size = 64;
+            icon.add_css_class ("store-app-icon");
+            icon.valign = Align.CENTER;
+            card.append (icon);
+            var info_box = new Box (Orientation.VERTICAL, 2);
+            info_box.hexpand = true;
+            info_box.valign  = Align.CENTER;
+            var name_lbl = new Label (entry.name);
+            name_lbl.add_css_class ("store-app-name");
+            name_lbl.xalign = 0;
+            name_lbl.ellipsize = EllipsizeMode.END;
+            info_box.append (name_lbl);
+            var host_lbl = new Label (entry.host);
+            host_lbl.add_css_class ("store-app-developer");
+            host_lbl.xalign = 0;
+            info_box.append (host_lbl);
+            if (entry.summary != "") {
+                var sum_lbl = new Label (entry.summary);
+                sum_lbl.add_css_class ("store-app-summary");
+                sum_lbl.xalign = 0;
+                sum_lbl.wrap = true;
+                sum_lbl.max_width_chars = 50;
+                info_box.append (sum_lbl);
+            }
+            card.append (info_box);
+            var remove_btn = new Button.from_icon_name ("user-trash-symbolic");
+            remove_btn.add_css_class ("flat");
+            remove_btn.valign = Align.CENTER;
+            remove_btn.tooltip_text = _("Remove");
+            remove_btn.visible = entry.installed;
+            card.append (remove_btn);
+            var btn = new Button.with_label (entry.installed ? _("Open") : _("Get"));
+            btn.add_css_class ("store-install-btn");
+            if (entry.installed) btn.add_css_class ("installed");
+            btn.valign = Align.CENTER;
+            btn.clicked.connect (() => {
+                if (entry.installed) {
+                    web_catalog.open (entry);
+                    return;
+                }
+                btn.sensitive = false;
+                btn.label = _("Installing…");
+                string? error;
+                web_catalog.install (entry, () => {
+                    btn.sensitive = true;
+                    bool done = entry.installed;
+                    btn.label = done ? _("Open") : _("Get");
+                    if (done) btn.add_css_class ("installed");
+                    remove_btn.visible = done;
+                    if (done) main_window.add_toast (new Toast (_("%s installed").printf (entry.name)));
+                    return false;
+                }, out error);
+                if (error != null) {
+                    btn.sensitive = true;
+                    btn.label = _("Get");
+                    main_window.add_toast (new Toast (error));
+                }
+            });
+            remove_btn.clicked.connect (() => {
+                web_catalog.uninstall (entry);
+                btn.label = _("Get");
+                btn.remove_css_class ("installed");
+                remove_btn.visible = false;
+            });
+            card.append (btn);
+            if (entry.icon != "") load_icon_async (icon, entry.icon);
+            return card;
+        }
 
         private PluginsPage plugins_page;
 

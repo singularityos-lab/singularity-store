@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "netflix",
+      "name": "Netflix",
+      "url": "https://www.netflix.com",
+      "icon": "https://www.netflix.com/favicon.ico",
+      "summary": "Series, films and documentaries.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "url": "https://www.youtube.com",
+      "icon": "https://www.gstatic.com/youtube/img/web/monochrome/logo_512x512.png",
+      "summary": "Videos, channels and live streams.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "primevideo",
+      "name": "Prime Video",
+      "url": "https://www.primevideo.com",
+      "icon": "https://m.media-amazon.com/images/G/01/digital/video/DVUI/favicons/favicon-196x196.png",
+      "summary": "Films and series from Amazon.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "disneyplus",
+      "name": "Disney+",
+      "url": "https://www.disneyplus.com",
+      "icon": "https://static-assets.bamgrid.com/product/disneyplus/favicons/msftpwa-512x512-aurora.b544236c6734eb78083b1f4f31d6f873.png",
+      "summary": "Disney, Pixar, Marvel and Star Wars.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "appletv",
+      "name": "Apple TV+",
+      "url": "https://tv.apple.com",
+      "icon": "https://tv.apple.com/assets/app-icons/pwa-manifest/tv-icon_1024.png",
+      "summary": "Apple Original series and films.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "url": "https://open.spotify.com",
+      "icon": "https://open.spotify.com/favicon.ico",
+      "summary": "Music and podcasts.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Audio"
+    },
+    {
+      "id": "twitch",
+      "name": "Twitch",
+      "url": "https://www.twitch.tv",
+      "icon": "https://www.twitch.tv/apple-touch-icon.png",
+      "summary": "Live streams of games, music and more.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "raiplay",
+      "name": "RaiPlay",
+      "url": "https://www.raiplay.it",
+      "icon": "https://www.raiplay.it/dl/components/img/logo-app.png",
+      "summary": "Rai channels live and on demand.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": true,
+      "category": "Video"
+    },
+    {
+      "id": "mediasetinfinity",
+      "name": "Mediaset Infinity",
+      "url": "https://mediasetinfinity.mediaset.it",
+      "icon": "https://mediasetinfinity.mediaset.it/apple-touch-icon.png",
+      "summary": "Mediaset channels live and on demand.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "crunchyroll",
+      "name": "Crunchyroll",
+      "url": "https://www.crunchyroll.com",
+      "icon": "https://crunchyroll.com/build/assets/img/pwa/v2/512.png",
+      "summary": "Anime series and films.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "max",
+      "name": "Max",
+      "url": "https://play.max.com",
+      "icon": "https://www.hbomax.com/dotcom/img/hbomax/apple-touch-icon.png",
+      "summary": "HBO series, films and more.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "dazn",
+      "name": "DAZN",
+      "url": "https://www.dazn.com",
+      "icon": "https://www.dazn.com/icons/apple-touch-icon-1024x1024.png",
+      "summary": "Live sport.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "plutotv",
+      "name": "Pluto TV",
+      "url": "https://pluto.tv",
+      "icon": "https://pluto.tv/favicon/og_logo.png",
+      "summary": "Free live channels and films.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "plex",
+      "name": "Plex",
+      "url": "https://app.plex.tv",
+      "icon": "https://app.plex.tv/desktop/favicon-mask.svg",
+      "summary": "Your own media library, anywhere.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
+      "id": "youtubemusic",
+      "name": "YouTube Music",
+      "url": "https://music.youtube.com",
+      "icon": "https://www.gstatic.com/youtube/media/ytm/images/applauncher/music_icon_512x512.png",
+      "summary": "Songs, albums and music videos.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Audio"
+    },
+    {
+      "id": "soundcloud",
+      "name": "SoundCloud",
+      "url": "https://soundcloud.com",
+      "icon": "https://soundcloud.com/pwa-round-icon-512x512.png",
+      "summary": "Music from independent artists.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Audio"
+    },
+    {
+      "id": "deezer",
+      "name": "Deezer",
+      "url": "https://www.deezer.com",
+      "icon": "https://cdn-files.dzcdn.net/cache/images/common/favicon/favicon-240x240.bb3a6a29ad16a77f10cb.png",
+      "summary": "Music streaming.",
+      "form_factors": "desktop;tablet;phone;tv",
+      "pinned": false,
+      "category": "Audio"
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "url": "https://mail.google.com",
+      "icon": "https://mail.google.com/favicon.ico",
+      "summary": "Google mail.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Office"
+    },
+    {
+      "id": "googledocs",
+      "name": "Google Docs",
+      "url": "https://docs.google.com",
+      "icon": "https://docs.google.com/favicon.ico",
+      "summary": "Documents in the browser.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Office"
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "url": "https://www.notion.so",
+      "icon": "https://www.notion.com/front-static/logo-ios.png",
+      "summary": "Notes, docs and projects.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Office"
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "url": "https://web.whatsapp.com",
+      "icon": "https://web.whatsapp.com/apple-touch-icon.png",
+      "summary": "Messages from your phone on the computer.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Network"
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "url": "https://web.telegram.org",
+      "icon": "https://web.telegram.org/apple-touch-icon.png",
+      "summary": "Messages and channels.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Network"
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "url": "https://www.figma.com",
+      "icon": "https://static.figma.com/app/icon/2/icon-512-maskable.png",
+      "summary": "Interface design together.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Graphics"
+    }
+  ]
+}

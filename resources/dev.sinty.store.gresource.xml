@@ -2,5 +2,6 @@
 <gresources>
   <gresource prefix="/dev/sinty/store">
     <file preprocess="xml-stripblanks">ui/main.ui</file>
+    <file alias="webapps.json">data/webapps.json</file>
   </gresource>
 </gresources>
