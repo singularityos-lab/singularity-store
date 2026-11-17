@@ -133,9 +133,18 @@ namespace Singularity.Apps.Store {
             return list;
         }
 
+        private static string? browser_executable () {
+            var info = new GLib.DesktopAppInfo ("dev.sinty.browser.desktop");
+            if (info != null) {
+                string? exe = info.get_executable ();
+                if (exe != null && Path.is_absolute (exe) && FileUtils.test (exe, FileTest.IS_EXECUTABLE)) return exe;
+            }
+            return Environment.find_program_in_path ("singularity-browser");
+        }
+
         public void install (WebEntry entry, owned SourceFunc? done, out string? error) {
             error = null;
-            string? exe = Environment.find_program_in_path ("singularity-browser");
+            string? exe = browser_executable ();
             if (exe == null) {
                 error = _("The Browser is not installed");
                 return;
@@ -154,7 +163,7 @@ namespace Singularity.Apps.Store {
         }
 
         public void uninstall (WebEntry entry) {
-            string? exe = Environment.find_program_in_path ("singularity-browser");
+            string? exe = browser_executable ();
             if (exe == null) return;
             try {
                 Process.spawn_sync (null, { exe, "--uninstall-webapp", entry.app_id }, null, SpawnFlags.STDOUT_TO_DEV_NULL, null, null, null, null);
