@@ -699,7 +699,10 @@ namespace Singularity.Apps.Store {
             discover_hits = hits;
 
             var kind = main_window.form_factor;
-            if (kind == Singularity.FormFactorKind.TV) append_web_highlights (discover_box, _("For Your TV"), kind);
+            if (kind == Singularity.FormFactorKind.TV) {
+                populate_discover_tv (hits);
+                return;
+            }
 
             // Featured hero section - horizontal scroll of banner cards
             discover_box.append (make_section_label ("Editor's Picks"));
@@ -743,6 +746,60 @@ namespace Singularity.Apps.Store {
             }
 
             Singularity.Widgets.Skeleton.reveal (discover_skeleton, discover_scroll);
+        }
+
+        private void populate_discover_tv (Json.Array hits) {
+            discover_box.spacing = 24;
+            discover_box.margin_start = 32;
+            discover_box.margin_end = 32;
+            var picks = web_catalog.highlights (Singularity.FormFactorKind.TV);
+            if (picks.length > 0) {
+                var web = new Singularity.Widgets.MediaShelf (_("For Your TV"), 132);
+                web.bare = true;
+                for (uint i = 0; i < picks.length; i++) {
+                    var entry = picks[i];
+                    var art = web.append_tile ("web-browser", entry.name, entry.installed ? _("Installed") : _("Web app"));
+                    if (entry.icon != "") load_icon_async (art.icon, entry.icon);
+                }
+                web.item_activated.connect ((i) => activate_web (picks[i]));
+                discover_box.append (web);
+            }
+            int total = (int) hits.get_length ();
+            string[] titles = { _("Editor's Picks"), _("New & Noteworthy"), _("Top Free Apps") };
+            int[] ends = { int.min (6, total), int.min (14, total), int.min (22, total) };
+            int start = 0;
+            for (int s = 0; s < titles.length; s++) {
+                if (ends[s] <= start) break;
+                var shelf = new Singularity.Widgets.MediaShelf (titles[s], 132);
+                shelf.bare = true;
+                var ids = new GenericArray<string> ();
+                for (int i = start; i < ends[s]; i++) {
+                    var info = parse_app (hits.get_object_element (i));
+                    ids.add (info.app_id);
+                    var art = shelf.append_tile ("application-x-executable", info.name, info.summary);
+                    if (info.icon_url != null && info.icon_url != "") load_icon_async (art.icon, info.icon_url);
+                }
+                shelf.item_activated.connect ((i) => {
+                    if (ids[i] != "") show_app_detail (ids[i]);
+                });
+                discover_box.append (shelf);
+                start = ends[s];
+            }
+            Singularity.Widgets.Skeleton.reveal (discover_skeleton, discover_scroll);
+        }
+
+        private void activate_web (WebEntry entry) {
+            if (entry.installed) {
+                web_catalog.open (entry);
+                return;
+            }
+            string? error;
+            main_window.add_toast (new Toast (_("Installing %s…").printf (entry.name)));
+            web_catalog.install (entry, () => {
+                if (entry.installed) main_window.add_toast (new Toast (_("%s is installed").printf (entry.name)));
+                return false;
+            }, out error);
+            if (error != null) main_window.add_toast (new Toast (error));
         }
 
         private void show_discover_error () {
@@ -1727,6 +1784,13 @@ namespace Singularity.Apps.Store {
                 action_box.append (install_btn);
             }
             meta.append (action_box);
+            var first_action = action_box.get_first_child ();
+            if (first_action != null && main_window.form_factor == Singularity.FormFactorKind.TV) {
+                Idle.add (() => {
+                    first_action.grab_focus ();
+                    return false;
+                });
+            }
 
             var rating_box = new Box (Orientation.HORIZONTAL, 4);
             rating_box.margin_top = 8;
@@ -1764,7 +1828,7 @@ namespace Singularity.Apps.Store {
                 var desc_lbl = new Label (strip_html (info.description));
                 desc_lbl.xalign     = 0;
                 desc_lbl.wrap       = true;
-                desc_lbl.selectable = true;
+                desc_lbl.selectable = main_window.form_factor != Singularity.FormFactorKind.TV;
                 desc_lbl.use_markup = false;
                 detail_box.append (desc_lbl);
             }
@@ -2241,6 +2305,15 @@ namespace Singularity.Apps.Store {
                 if (captured_id != "") show_app_detail (captured_id);
             });
             card.add_controller (gesture);
+            card.focusable = true;
+            var keys = new EventControllerKey ();
+            keys.key_pressed.connect ((val, code, state) => {
+                if (card.get_focus_child () != null) return false;
+                if (val != Gdk.Key.Return && val != Gdk.Key.KP_Enter && val != Gdk.Key.space) return false;
+                if (captured_id != "") show_app_detail (captured_id);
+                return true;
+            });
+            card.add_controller (keys);
 
             // Icon
             var icon = new Image.from_icon_name ("application-x-executable");
