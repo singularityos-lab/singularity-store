@@ -96,6 +96,9 @@ install_data('data/dev.sinty.store.desktop',
 install_data('data/dev.sinty.store.gschema.xml',
   install_dir: get_option('datadir') / 'glib-2.0' / 'schemas'
 )
+install_data('data/app-settings/dev.sinty.store.json',
+  install_dir: get_option('datadir') / 'singularity' / 'app-settings'
+)
 install_data('data/icons/dev.sinty.store.svg',
   install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps'
 )

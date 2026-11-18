@@ -1,0 +1,32 @@
+{
+  "app_id": "dev.sinty.store",
+  "name": "Store",
+  "icon": "dev.sinty.store",
+  "exec": "singularity-store",
+  "description": "Find and install apps",
+  "schema-id": "dev.sinty.store",
+  "settings": [
+    {
+      "key": "app-sources",
+      "label": "App Sources",
+      "subtitle": "The Store also shows the apps of the sources you add here. Add only sources you trust.",
+      "widget": "list",
+      "list-command": ["cpak", "remote", "list", "--json"],
+      "add-command": ["cpak", "remote", "add", "{name}", "{location}", "--json"],
+      "remove-command": ["cpak", "remote", "remove", "{id}"],
+      "item-id": "name",
+      "item-title": "title",
+      "item-subtitle": "url",
+      "item-removable": "removable",
+      "item-icon": "folder-remote-symbolic",
+      "add-label": "Add Source",
+      "add-description": "Enter a short name and the address of the source's .flatpakrepo file. The source is checked before it is added.",
+      "remove-description": "Apps installed from this source stay on this computer but no longer receive updates.",
+      "empty-label": "No Sources",
+      "fields": [
+        { "key": "name", "label": "Name", "placeholder": "For example gnome-nightly" },
+        { "key": "location", "label": "Address", "placeholder": "https://example.org/repo.flatpakrepo" }
+      ]
+    }
+  ]
+}

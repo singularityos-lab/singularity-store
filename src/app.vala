@@ -86,6 +86,9 @@ namespace Singularity.Apps.Store {
         private SxiClient sxi = new SxiClient ();
         private WelcomeDialog? welcome = null;
         private Gee.HashMap<string, Json.Object> sxi_apps = new Gee.HashMap<string, Json.Object> ();
+        private Gee.HashMap<string, AppInfo> source_apps = new Gee.HashMap<string, AppInfo> ();
+        private string sources_key = "";
+        private bool sources_busy = false;
         private Gee.HashMap<string, Json.Object> sxi_installed = new Gee.HashMap<string, Json.Object> ();
         private Gee.HashMap<string, Button> sxi_buttons = new Gee.HashMap<string, Button> ();
         private Button collection_btn;
@@ -350,6 +353,10 @@ namespace Singularity.Apps.Store {
             main_window.set_content (main_stack);
             main_window.present ();
             connect_collection.begin ();
+            refresh_sources.begin ();
+            main_window.notify["is-active"].connect (() => {
+                if (main_window.is_active) refresh_sources.begin ();
+            });
 
             installed_load_then_discover = true;
             refresh_installed_async ();
@@ -722,6 +729,7 @@ namespace Singularity.Apps.Store {
             discover_box.append (hero_scroll);
 
             if (kind != Singularity.FormFactorKind.TV) append_web_highlights (discover_box, _("Web Apps"), kind);
+            append_source_sections (discover_box);
 
             // New & Noteworthy - vertical list
             var new_lbl = make_section_label ("New & Noteworthy");
@@ -1629,6 +1637,12 @@ namespace Singularity.Apps.Store {
                 populate_detail (sxi_info (sxi_apps[app_id]));
                 return;
             }
+            if (source_apps.has_key (app_id)) {
+                var info = source_apps[app_id];
+                info.is_installed = is_app_installed (app_id);
+                populate_detail (info);
+                return;
+            }
 
             var sp = make_spinner ();
             sp.margin_top = 80;
@@ -1838,7 +1852,7 @@ namespace Singularity.Apps.Store {
             }
 
             // Permissions section (Play Store style)
-            if (info.source == "sxi") return;
+            if (info.source == "sxi" || info.source == "source") return;
             var perm_box = new Box (Orientation.VERTICAL, 8);
             perm_box.margin_top = 24;
             detail_box.append (perm_box);
@@ -2196,6 +2210,18 @@ namespace Singularity.Apps.Store {
 
         private void load_icon_async (Gtk.Image image, string icon_url) {
             image.set_data<string> ("icon-url", icon_url);
+            if (icon_url.has_prefix ("/")) {
+                File.new_for_path (icon_url).load_bytes_async.begin (null, (obj, res) => {
+                    try {
+                        var bytes = ((File) obj).load_bytes_async.end (res, null);
+                        var stored = image.get_data<string> ("icon-url");
+                        if (stored == icon_url) image.set_from_paintable (icon_paintable_from_bytes (bytes, image.pixel_size > 0 ? image.pixel_size : 64));
+                    } catch (Error e) {
+                        debug ("Icon %s: %s", icon_url, e.message);
+                    }
+                });
+                return;
+            }
             var msg = new Soup.Message ("GET", icon_url);
             http_session.send_and_read_async.begin (msg, GLib.Priority.LOW, null, (obj, res) => {
                 try {
@@ -2762,7 +2788,74 @@ namespace Singularity.Apps.Store {
                 search_result_box.append (make_app_card (sxi_info (app)));
                 count++;
             }
+            foreach (var info in source_apps.values) {
+                string haystack = "%s %s %s".printf (info.name, info.summary, info.app_id).casefold ();
+                if (!haystack.contains (q)) continue;
+                info.is_installed = is_app_installed (info.app_id);
+                search_result_box.append (make_app_card (info));
+                count++;
+            }
             return count;
+        }
+
+        private async void refresh_sources () {
+            if (sources_busy) return;
+            sources_busy = true;
+            string key = "";
+            Gee.ArrayList<Json.Object>? apps = null;
+            try {
+                key = yield Singularity.Async.run<string> ((c) => PackageTool.sources_key (), Singularity.Async.Qos.UTILITY);
+                if (key != sources_key) {
+                    apps = yield Singularity.Async.run<Gee.ArrayList<Json.Object>> ((c) => PackageTool.source_apps (), Singularity.Async.Qos.UTILITY);
+                }
+            } catch (Error e) {
+                warning ("App sources: %s", e.message);
+            }
+            sources_busy = false;
+            if (apps == null) return;
+            sources_key = key;
+            source_apps.clear ();
+            foreach (var app in apps) {
+                var info = source_info (app);
+                source_apps[info.app_id] = info;
+            }
+            if (discover_hits != null) populate_discover (discover_hits);
+            if (main_stack.visible_child_name == "search" && current_category == "" && current_search_query != "") do_search (current_search_query);
+        }
+
+        private AppInfo source_info (Json.Object app) {
+            var info = new AppInfo ();
+            info.source = "source";
+            info.app_id = obj_str (app, "id");
+            info.name = obj_str (app, "name");
+            if (info.name == "") info.name = info.app_id;
+            info.summary = obj_str (app, "summary");
+            string title = obj_str (app, "source_title");
+            info.developer = obj_str (app, "developer");
+            if (info.developer == "") info.developer = title;
+            info.category = title;
+            var icon = obj_str (app, "icon");
+            info.icon_url = icon != "" ? icon : null;
+            info.is_installed = is_app_installed (info.app_id);
+            return info;
+        }
+
+        private void append_source_sections (Box target) {
+            var titles = new Gee.TreeMap<string, Gee.ArrayList<AppInfo>> ();
+            foreach (var info in source_apps.values) {
+                if (!titles.has_key (info.category)) titles[info.category] = new Gee.ArrayList<AppInfo> ();
+                titles[info.category].add (info);
+            }
+            foreach (var entry in titles.entries) {
+                var label = make_section_label (_("From %s").printf (entry.key));
+                label.margin_top = 20;
+                target.append (label);
+                entry.value.sort ((a, b) => strcmp (a.name.casefold (), b.name.casefold ()));
+                foreach (var info in entry.value) {
+                    info.is_installed = is_app_installed (info.app_id);
+                    target.append (make_app_card (info));
+                }
+            }
         }
 
         private void install_sxi (string app_id, Button? btn) {

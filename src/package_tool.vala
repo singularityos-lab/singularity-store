@@ -2,6 +2,10 @@ namespace Singularity.Apps.Store {
 
     public class PackageTool : Object {
         private const string ORIGIN = "flatpak/flathub/";
+        private const string FLATPAK = "flatpak/";
+        private static HashTable<string, string>? origins = null;
+        private static HashTable<string, Json.Object>? sources = null;
+        private static Mutex sources_lock;
         private static int probed = -1;
         private static string[] capabilities = {};
         private static HashTable<string, string>? requested = null;
@@ -59,18 +63,87 @@ namespace Singularity.Apps.Store {
         }
 
         public static string origin (string app_id) {
-            return ORIGIN + app_id;
+            sources_lock.lock ();
+            string? known = origins != null ? origins.lookup (app_id) : null;
+            sources_lock.unlock ();
+            return known ?? ORIGIN + app_id;
         }
 
         private static string? app_of (string origin) {
-            return origin.has_prefix (ORIGIN) ? origin.substring (ORIGIN.length) : null;
+            if (!origin.has_prefix (FLATPAK)) return null;
+            var parts = origin.substring (FLATPAK.length).split ("/");
+            return parts.length == 2 && parts[0] != "" && parts[1] != "" ? parts[1] : null;
         }
 
         private static string? id_of (Json.Object app) {
-            var id = app_of (app.get_string_member_with_default ("origin", "").down ());
+            var origin = app.get_string_member_with_default ("origin", "").down ();
+            var id = app_of (origin);
             if (id == null) return null;
             var name = app.get_string_member_with_default ("name", "");
-            return name.down () == id ? name : id;
+            var result = name.down () == id ? name : id;
+            remember_origin (result, origin);
+            return result;
+        }
+
+        private static void remember_origin (string app_id, string origin) {
+            sources_lock.lock ();
+            if (origins == null) origins = new HashTable<string, string> (str_hash, str_equal);
+            origins.insert (app_id, origin);
+            sources_lock.unlock ();
+        }
+
+        public static bool manages_sources () {
+            return cpak () && "flatpak-remotes" in capabilities;
+        }
+
+        public static string sources_key () {
+            if (!manages_sources ()) return "";
+            var root = run_json ({ "cpak", "remote", "list", "--json" });
+            if (root == null || root.get_node_type () != Json.NodeType.ARRAY) return "";
+            var key = new StringBuilder ();
+            root.get_array ().foreach_element ((a, i, node) => {
+                var remote = node.get_object ();
+                if (remote == null || remote.get_boolean_member_with_default ("builtin", false)) return;
+                key.append_printf ("%s %s\n", remote.get_string_member_with_default ("name", ""), remote.get_string_member_with_default ("url", ""));
+            });
+            return key.str;
+        }
+
+        public static Gee.ArrayList<Json.Object> source_apps () {
+            var apps = new Gee.ArrayList<Json.Object> ();
+            var found = new HashTable<string, Json.Object> (str_hash, str_equal);
+            if (!manages_sources ()) return apps;
+            var root = run_json ({ "cpak", "remote", "list", "--json" });
+            if (root == null || root.get_node_type () != Json.NodeType.ARRAY) return apps;
+            root.get_array ().foreach_element ((a, i, node) => {
+                var remote = node.get_object ();
+                if (remote == null || remote.get_boolean_member_with_default ("builtin", false)) return;
+                var name = remote.get_string_member_with_default ("name", "");
+                var title = remote.get_string_member_with_default ("title", name);
+                var listed = run_json ({ "cpak", "remote", "apps", name, "--json" });
+                if (listed == null || listed.get_node_type () != Json.NodeType.ARRAY) return;
+                listed.get_array ().foreach_element ((b, j, item) => {
+                    var app = item.get_object ();
+                    if (app == null) return;
+                    var id = app.get_string_member_with_default ("id", "");
+                    if (id == "" || found.contains (id)) return;
+                    app.set_string_member ("source_title", title);
+                    found.insert (id, app);
+                    apps.add (app);
+                    remember_origin (id, app.get_string_member_with_default ("origin", ORIGIN + id.down ()));
+                });
+            });
+            sources_lock.lock ();
+            sources = found;
+            sources_lock.unlock ();
+            return apps;
+        }
+
+        private static Json.Object? source_of (string app_id) {
+            sources_lock.lock ();
+            Json.Object? app = sources != null ? sources.lookup (app_id) : null;
+            sources_lock.unlock ();
+            return app;
         }
 
         public static string? requested_permissions (string app_id) {
@@ -92,6 +165,18 @@ namespace Singularity.Apps.Store {
         }
 
         public static string[] install_argv (string app_id) {
+            var source = cpak () ? source_of (app_id) : null;
+            if (source != null) {
+                string[] argv = { "cpak", "install", "--flatpak", app_id, "--flatpak-remote", source.get_string_member_with_default ("remote", "") };
+                var branch = source.get_string_member_with_default ("branch", "");
+                if (branch != "") {
+                    argv += "--branch";
+                    argv += branch;
+                }
+                argv += "--json-progress";
+                argv += "-y";
+                return argv;
+            }
             if (cpak ()) return { "cpak", "install", "--flatpak", app_id, "--json-progress", "-y" };
             return { "flatpak", "--user", "install", "-y", "--noninteractive", "flathub", app_id };
         }
