@@ -103,7 +103,7 @@ namespace Singularity.Apps.Store {
         // ============================================================
 
         public StoreApp () {
-            Object (application_id: "dev.sinty.store", flags: ApplicationFlags.FLAGS_NONE);
+            Object (application_id: "dev.sinty.store", flags: ApplicationFlags.HANDLES_OPEN);
             add_main_option ("updates", 0, OptionFlags.NONE, OptionArg.NONE, _("Show available updates"), null);
             add_main_option ("installed", 0, OptionFlags.NONE, OptionArg.NONE, _("Show installed apps"), null);
             add_main_option ("plugins", 0, OptionFlags.NONE, OptionArg.NONE, _("Show plugins for your apps"), null);
@@ -147,6 +147,16 @@ namespace Singularity.Apps.Store {
             activate ();
             activate_action (view, null);
             return 0;
+        }
+
+        protected override void open (File[] files, string hint) {
+            string? id = null;
+            foreach (var file in files) {
+                id = Singularity.AppLinks.store_page_id (file.get_uri ());
+                if (id != null) break;
+            }
+            if (id != null) open_app_page (id);
+            else activate ();
         }
 
         public void open_app_page (string app_id) {
@@ -1632,6 +1642,15 @@ namespace Singularity.Apps.Store {
             main_stack.visible_child_name = "detail";
             back_button.visible           = true;
             clear_box (detail_box);
+
+            if (app_id.has_prefix (WebCatalog.ID_PREFIX)) {
+                var entry = web_catalog.find (app_id);
+                if (entry != null) {
+                    detail_box.append (make_section_label (entry.name));
+                    detail_box.append (make_web_card (entry));
+                    return;
+                }
+            }
 
             if (sxi_apps.has_key (app_id)) {
                 populate_detail (sxi_info (sxi_apps[app_id]));

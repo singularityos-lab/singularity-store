@@ -125,6 +125,13 @@ namespace Singularity.Apps.Store {
             return r;
         }
 
+        public WebEntry? find (string app_id) {
+            foreach (var e in _entries) {
+                if (e.app_id == app_id) return e;
+            }
+            return null;
+        }
+
         public GenericArray<WebEntry> highlights (Singularity.FormFactorKind kind) {
             var list = new GenericArray<WebEntry> ();
             foreach (var e in ranked (kind)) {
