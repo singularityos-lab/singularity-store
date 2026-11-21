@@ -2344,7 +2344,7 @@ namespace Singularity.Apps.Store {
 
             // Click anywhere on the card (except the button), open detail
             var gesture = new GestureClick ();
-            gesture.pressed.connect ((n, x, y) => {
+            gesture.released.connect ((n, x, y) => {
                 var target = card.pick (x, y, PickFlags.DEFAULT);
                 if (target != null && card_button != null && (target == card_button || target.is_ancestor (card_button))) return;
                 if (captured_id != "") show_app_detail (captured_id);
