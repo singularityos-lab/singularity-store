@@ -222,6 +222,36 @@
       "category": "Network"
     },
     {
+      "id": "facebook",
+      "name": "Facebook",
+      "url": "https://www.facebook.com",
+      "icon": "https://www.facebook.com/images/fb_icon_325x325.png",
+      "summary": "Friends, groups and pages.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Network"
+    },
+    {
+      "id": "x",
+      "name": "X",
+      "url": "https://x.com",
+      "icon": "https://abs.twimg.com/responsive-web/client-web/icon-ios.77d25eba.png",
+      "summary": "Posts, news and conversations.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Network"
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "url": "https://www.instagram.com",
+      "icon": "https://www.instagram.com/static/images/ico/apple-touch-icon-180x180-precomposed.png/c06fdb2357bd.png",
+      "summary": "Photos, reels and stories from people you follow.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Network"
+    },
+    {
       "id": "figma",
       "name": "Figma",
       "url": "https://www.figma.com",
