@@ -252,6 +252,16 @@
       "category": "Network"
     },
     {
+      "id": "tiktok",
+      "name": "TikTok",
+      "url": "https://www.tiktok.com",
+      "icon": "https://sf16-sg.tiktokcdn.com/obj/eden-sg/uvkuhyieh7lpqpbj/pwa/512x512.png",
+      "summary": "Short videos from creators around the world.",
+      "form_factors": "desktop;tablet;phone",
+      "pinned": false,
+      "category": "Video"
+    },
+    {
       "id": "figma",
       "name": "Figma",
       "url": "https://www.figma.com",
