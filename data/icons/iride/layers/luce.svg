@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="236" height="236" viewBox="0 0 236 236" fill="none">
+  <defs>
+    <radialGradient id="st_bloom" cx="76" cy="96" r="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="white" stop-opacity="0.34" />
+      <stop offset="1" stop-color="white" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="st_clip">
+      <path d="M50 84H186Q204 84 205.5 102L211.5 188Q213 212 189 212H47Q23 212 24.5 188L30.5 102Q32 84 50 84Z" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#st_clip)">
+    <rect width="236" height="236" fill="url(#st_bloom)" />
+    <rect x="0" y="84" width="236" height="16" fill="#12307f" opacity="0.2" />
+  </g>
+</svg>
