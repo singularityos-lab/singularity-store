@@ -6,7 +6,7 @@ using Singularity.Widgets;
 
 namespace Singularity.Apps.Store {
 
-    public class StoreApp : Singularity.Application {
+    public class StoreApp : Singularity.Application, Singularity.Migration.Migratable {
 
         // Window
         private StoreWindow main_window;
@@ -29,6 +29,11 @@ namespace Singularity.Apps.Store {
         private uint search_timeout_id = 0;
         private string current_nav = "discover";
         private bool discover_loaded = false;
+        private bool discover_settled = true;
+        private bool installed_settled = true;
+        private bool web_settled = true;
+        private bool collection_started = false;
+        private const int SETTLE_MS = 15000;
         private bool charts_loaded = false;
         private bool recent_loaded = false;
         private string[] installed_app_ids = {};
@@ -61,6 +66,7 @@ namespace Singularity.Apps.Store {
         private StatusPage search_status;
         private Button search_status_button;
         private string current_category = "";
+        private Gee.HashMap<string, Gtk.Button> category_buttons = new Gee.HashMap<string, Gtk.Button> ();
         private bool search_status_clears = false;
         private ScrolledWindow search_scroll;
         private Box search_result_box;
@@ -325,6 +331,76 @@ namespace Singularity.Apps.Store {
             }
         }
 
+        public GLib.Variant save_model () {
+            return new VariantDict ().end ();
+        }
+
+        public async void restore_model (GLib.Variant model) throws Error {
+        }
+
+        public string window_kind (Gtk.Window w) {
+            if (w is StoreWindow) return "store";
+            if (w is WelcomeDialog) return "welcome";
+            return "";
+        }
+
+        public GLib.Variant save_window (Gtk.Window w) {
+            var d = new VariantDict ();
+            if (w is WelcomeDialog) {
+                d.insert_value ("page", new GLib.Variant.int32 (((WelcomeDialog) w).page));
+                return d.end ();
+            }
+            d.insert_value ("nav", new GLib.Variant.string (current_nav));
+            d.insert_value ("view", new GLib.Variant.string (main_stack.visible_child_name ?? ""));
+            d.insert_value ("app", new GLib.Variant.string (current_detail_app_id));
+            d.insert_value ("category", new GLib.Variant.string (current_category));
+            d.insert_value ("query", new GLib.Variant.string (current_search_query));
+            return d.end ();
+        }
+
+        public async Gtk.Window? rebuild_window (string kind, GLib.Variant data) throws Error {
+            if (kind == "welcome") {
+                if (main_window == null) return null;
+                if (welcome != null) welcome.destroy ();
+                open_welcome ();
+                var page = new VariantDict (data).lookup_value ("page", VariantType.INT32);
+                if (page != null) welcome.page = page.get_int32 ();
+                var shown = welcome;
+                int64 deadline = GLib.get_monotonic_time () + SETTLE_MS * 1000;
+                while (shown.pending > 0 && GLib.get_monotonic_time () < deadline) {
+                    GLib.Timeout.add (40, rebuild_window.callback);
+                    yield;
+                }
+                return shown;
+            }
+            if (kind != "store") return null;
+            if (welcome != null) welcome.destroy ();
+            welcome = null;
+            if (main_window != null) main_window.destroy ();
+            main_window = null;
+            activate ();
+            var d = new VariantDict (data);
+            string nav = d.lookup_value ("nav", VariantType.STRING).get_string ();
+            string action = "show-" + (nav == "discover" ? "featured" : nav == "charts" ? "popular" : nav);
+            if (nav != "discover" && lookup_action (action) != null) activate_action (action, null);
+            string view = d.lookup_value ("view", VariantType.STRING).get_string ();
+            string category = d.lookup_value ("category", VariantType.STRING).get_string ();
+            string query = d.lookup_value ("query", VariantType.STRING).get_string ();
+            if (view == "detail") {
+                show_app_detail (d.lookup_value ("app", VariantType.STRING).get_string ());
+            } else if (view == "search" && category_buttons.has_key (category)) {
+                category_buttons[category].clicked ();
+            } else if (view == "search" && query != "") {
+                gtk_search_entry.text = query;
+            }
+            int64 deadline = GLib.get_monotonic_time () + SETTLE_MS * 1000;
+            while ((!installed_settled || !discover_settled || !web_settled) && GLib.get_monotonic_time () < deadline) {
+                GLib.Timeout.add (40, rebuild_window.callback);
+                yield;
+            }
+            return main_window;
+        }
+
         protected override void activate () {
             if (main_window != null) {
                 main_window.present ();
@@ -357,12 +433,20 @@ namespace Singularity.Apps.Store {
             setup_web_view ();
 
             web_catalog.changed.connect (on_web_changed);
-            web_catalog.refresh.begin (http_session);
+            web_settled = false;
+            var catalog = web_catalog;
+            catalog.refresh.begin (http_session, (obj, res) => {
+                catalog.refresh.end (res);
+                web_settled = true;
+            });
             main_window.form_factor_changed.connect (() => on_web_changed ());
 
             main_window.set_content (main_stack);
             main_window.present ();
-            connect_collection.begin ();
+            if (!collection_started) {
+                collection_started = true;
+                connect_collection.begin ();
+            }
             refresh_sources.begin ();
             main_window.notify["is-active"].connect (() => {
                 if (main_window.is_active) refresh_sources.begin ();
@@ -551,6 +635,7 @@ namespace Singularity.Apps.Store {
                     gtk_search_entry.text = "";
                 });
                 box.append(cat_btn);
+                category_buttons[cat_id] = cat_btn;
             }
 
             box.append(new Separator (Orientation.HORIZONTAL));
@@ -673,6 +758,7 @@ namespace Singularity.Apps.Store {
 
         private void load_discover () {
             discover_loaded = true;
+            discover_settled = false;
             discover_skeleton.visible = true;
             discover_skeleton.opacity = 1.0;
             discover_scroll.visible   = false;
@@ -685,6 +771,7 @@ namespace Singularity.Apps.Store {
         }
 
         private void on_discover_response (Object? obj, AsyncResult res) {
+            discover_settled = true;
             try {
                 var bytes    = http_session.send_and_read_async.end (res);
                 var json_str = (string) bytes.get_data ();
@@ -1179,6 +1266,7 @@ namespace Singularity.Apps.Store {
         }
 
         private void refresh_installed_async () {
+            installed_settled = false;
             installed_status.label   = _("Loading installed apps…");
             installed_status.visible = true;
             installed_scroll.visible = false;
@@ -1193,6 +1281,7 @@ namespace Singularity.Apps.Store {
         }
 
         private bool on_installed_loaded () {
+            installed_settled = true;
             populate_installed_view ();
             if (installed_load_then_discover) {
                 installed_load_then_discover = false;
@@ -2665,6 +2754,11 @@ namespace Singularity.Apps.Store {
 
         private void show_welcome () {
             if (store_settings == null || !store_settings.get_boolean ("show-welcome")) return;
+            if (welcome != null) return;
+            open_welcome ();
+        }
+
+        private void open_welcome () {
             welcome = new WelcomeDialog (this, main_window, sxi.available);
             welcome.discover_collection.connect (() => activate_action ("show-collection", null));
             welcome.dismissed.connect ((show_again) => {

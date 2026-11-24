@@ -22,7 +22,7 @@ namespace Singularity.Apps.Store {
         };
 
         private Gdk.Paintable? center = null;
-        private Gdk.Paintable[] icons = {};
+        private Gdk.Paintable?[] icons = new Gdk.Paintable?[SLOTS.length / 3];
         private double phase = 0;
         private uint tick = 0;
 
@@ -30,28 +30,39 @@ namespace Singularity.Apps.Store {
             add_css_class ("store-welcome-scene");
             var theme = IconTheme.get_for_display (Gdk.Display.get_default ());
             center = theme.lookup_icon (center_icon, null, 256, 1, TextDirection.NONE, 0);
-            map.connect (() => {
-                var gtk = Gtk.Settings.get_default ();
-                if (gtk != null && !gtk.gtk_enable_animations) return;
+            var gtk = Gtk.Settings.get_default ();
+            if (gtk != null) {
+                ulong handler = gtk.notify["gtk-enable-animations"].connect (() => animate ());
+                destroy.connect (() => gtk.disconnect (handler));
+            }
+            map.connect (() => animate ());
+            unmap.connect (() => animate ());
+        }
+
+        private void animate () {
+            var gtk = Gtk.Settings.get_default ();
+            bool wanted = get_mapped () && (gtk == null || gtk.gtk_enable_animations);
+            if (wanted && tick == 0) {
                 tick = add_tick_callback ((w, clock) => {
                     phase = (clock.get_frame_time () / 1000000.0) % 6.0 / 6.0;
                     queue_draw ();
                     return Source.CONTINUE;
                 });
-            });
-            unmap.connect (() => {
-                if (tick != 0) remove_tick_callback (tick);
+            } else if (!wanted && tick != 0) {
+                remove_tick_callback (tick);
                 tick = 0;
-            });
+                phase = 0;
+                queue_draw ();
+            }
         }
 
-        public bool full {
-            get { return icons.length >= SLOTS.length / 3; }
+        public int slots {
+            get { return icons.length; }
         }
 
-        public void add_icon (Gdk.Paintable paintable) {
-            if (full) return;
-            icons += paintable;
+        public void set_icon (int slot, Gdk.Paintable paintable) {
+            if (slot < 0 || slot >= icons.length) return;
+            icons[slot] = paintable;
             queue_draw ();
         }
 
@@ -79,6 +90,7 @@ namespace Singularity.Apps.Store {
             glow (cr);
 
             for (int i = 0; i < icons.length; i++) {
+                if (icons[i] == null) continue;
                 double size = SLOTS[i * 3 + 2];
                 double bob = Math.sin ((phase + i * 0.13) * 2 * Math.PI) * 4;
                 draw_icon (snapshot, icons[i], dx, dy, scale, SLOTS[i * 3], SLOTS[i * 3 + 1] + bob, size);
@@ -144,6 +156,13 @@ namespace Singularity.Apps.Store {
         private bool flathub_requested = false;
         private string[] pending_collection = {};
         private bool answered = false;
+
+        public int pending { get; private set; default = 0; }
+
+        public int page {
+            get { return current; }
+            set { go (value); }
+        }
 
         public WelcomeDialog (Gtk.Application app, Gtk.Window parent, bool with_collection) {
             base (app, true);
@@ -218,7 +237,7 @@ namespace Singularity.Apps.Store {
                 pending_collection = urls;
                 return;
             }
-            foreach (var url in urls) load_icon (url, collection_scene);
+            for (int i = 0; i < urls.length; i++) load_icon (urls[i], collection_scene, i);
         }
 
         private void add_page (WelcomeScene scene, string title, string body) {
@@ -288,7 +307,9 @@ namespace Singularity.Apps.Store {
             if (flathub_requested) return;
             flathub_requested = true;
             var msg = new Soup.Message ("GET", POPULAR_URL);
+            pending++;
             session.send_and_read_async.begin (msg, Priority.LOW, null, (obj, res) => {
+                pending--;
                 try {
                     var bytes = session.send_and_read_async.end (res);
                     var parser = new Json.Parser ();
@@ -297,11 +318,12 @@ namespace Singularity.Apps.Store {
                     if (root == null || root.get_node_type () != Json.NodeType.OBJECT) return;
                     var root_obj = root.get_object ();
                     if (!root_obj.has_member ("hits")) return;
+                    int slot = 0;
                     root_obj.get_array_member ("hits").foreach_element ((arr, i, node) => {
                         if (node.get_node_type () != Json.NodeType.OBJECT) return;
                         var hit = node.get_object ();
                         if (hit.has_member ("icon") && !hit.get_null_member ("icon")) {
-                            load_icon (hit.get_string_member ("icon"), flathub_scene);
+                            load_icon (hit.get_string_member ("icon"), flathub_scene, slot++);
                         }
                     });
                 } catch (Error e) {
@@ -310,21 +332,23 @@ namespace Singularity.Apps.Store {
             });
         }
 
-        private void load_icon (string url, WelcomeScene scene) {
-            if (scene.full || url == "") return;
+        private void load_icon (string url, WelcomeScene scene, int slot) {
+            if (slot >= scene.slots || url == "") return;
             if (!url.has_prefix ("http://") && !url.has_prefix ("https://")) {
                 try {
                     var file = url.has_prefix ("file://") ? File.new_for_uri (url) : File.new_for_path (url);
-                    scene.add_icon (icon_paintable_from_bytes (file.load_bytes (), 128));
+                    scene.set_icon (slot, icon_paintable_from_bytes (file.load_bytes (), 128));
                 } catch (Error e) {
                 }
                 return;
             }
             var msg = new Soup.Message ("GET", url);
+            pending++;
             session.send_and_read_async.begin (msg, Priority.LOW, null, (obj, res) => {
+                pending--;
                 try {
                     var bytes = session.send_and_read_async.end (res);
-                    scene.add_icon (icon_paintable_from_bytes (bytes, 128));
+                    scene.set_icon (slot, icon_paintable_from_bytes (bytes, 128));
                 } catch (Error e) {
                 }
             });
