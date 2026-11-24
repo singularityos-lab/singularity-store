@@ -6,7 +6,7 @@ using Singularity.Widgets;
 
 namespace Singularity.Apps.Store {
 
-    public class StoreApp : Singularity.Application, Singularity.Migration.Migratable {
+    public class StoreApp : Singularity.Application, Singularity.Migration.Migratable, Singularity.Startup.Bootable {
 
         // Window
         private StoreWindow main_window;
@@ -155,24 +155,24 @@ namespace Singularity.Apps.Store {
             return 0;
         }
 
-        protected override void open (File[] files, string hint) {
+        private void open_files (File[] files) {
             string? id = null;
             foreach (var file in files) {
                 id = Singularity.AppLinks.store_page_id (file.get_uri ());
                 if (id != null) break;
             }
             if (id != null) open_app_page (id);
-            else activate ();
+            else show_window ();
         }
 
         public void open_app_page (string app_id) {
-            activate ();
+            show_window ();
             gtk_search_entry.text = "";
             show_app_detail (app_id);
         }
 
         public void open_search (string query) {
-            activate ();
+            show_window ();
             gtk_search_entry.text = query;
         }
 
@@ -378,7 +378,7 @@ namespace Singularity.Apps.Store {
             welcome = null;
             if (main_window != null) main_window.destroy ();
             main_window = null;
-            activate ();
+            show_window ();
             var d = new VariantDict (data);
             string nav = d.lookup_value ("nav", VariantType.STRING).get_string ();
             string action = "show-" + (nav == "discover" ? "featured" : nav == "charts" ? "popular" : nav);
@@ -401,7 +401,38 @@ namespace Singularity.Apps.Store {
             return main_window;
         }
 
-        protected override void activate () {
+        public Singularity.Startup.Plan build_plan (Singularity.Startup.Request request) {
+            var plan = new Singularity.Startup.Plan ();
+            plan.version = "store-1";
+            if (request.kind == Singularity.Startup.RequestKind.SERVICE) {
+                plan.main ("ready", Singularity.Startup.Category.PREPARE, (c) => {})
+                    .reaches (Singularity.Startup.Milestone.SHELL_READY)
+                    .reaches (Singularity.Startup.Milestone.CONTENT_READY)
+                    .reaches (Singularity.Startup.Milestone.INTERACTIVE);
+                return plan;
+            }
+            var window = plan.main ("window", Singularity.Startup.Category.SHELL, (c) => {
+                show_window ();
+                c.window = main_window;
+            }).reaches (Singularity.Startup.Milestone.SHELL_READY);
+            if (request.kind == Singularity.Startup.RequestKind.OPEN) {
+                var files = request.files ();
+                plan.main ("open-file", Singularity.Startup.Category.CONTENT, (c) => open_files (files))
+                    .depends_on ("window")
+                    .reaches (Singularity.Startup.Milestone.CONTENT_READY)
+                    .reaches (Singularity.Startup.Milestone.INTERACTIVE);
+            } else {
+                window.reaches (Singularity.Startup.Milestone.CONTENT_READY).reaches (Singularity.Startup.Milestone.INTERACTIVE);
+            }
+            return plan;
+        }
+
+        public void handle_request (Singularity.Startup.Request request) {
+            if (request.kind == Singularity.Startup.RequestKind.OPEN) open_files (request.files ());
+            else show_window ();
+        }
+
+        private void show_window () {
             if (main_window != null) {
                 main_window.present ();
                 return;
